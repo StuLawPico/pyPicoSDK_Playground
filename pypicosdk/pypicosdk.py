@@ -146,8 +146,15 @@ class PicoScopeBase:
         error_code = ERROR_STRING[status]
         if status != 0:
             if status in [POWER_SOURCE.SUPPLY_NOT_CONNECTED]:
-                warnings.warn('Power supply not connected.', 
-                              PowerSupplyWarning)
+                warnings.warn(
+                    'Power supply not connected.',
+                    PowerSupplyWarning,
+                )
+                return
+            # PICO_WAITING_FOR_DATA_BUFFERS (407) is not an error condition
+            # but indicates more buffers are required when streaming. Ignore
+            # it so that callers can continue processing the returned data.
+            if status == 407:
                 return
             self.close_unit()
             raise PicoSDKException(error_code)
