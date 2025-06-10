@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     strategy:
       fail-fast: false
@@ -28,6 +30,25 @@ jobs:
         python -m pip install .
         python -m pip install pytest build
         # pip install -r requirements.txt  # Install your dependencies
+
+    - name: Update repository versions
+      shell: bash
+      run: |
+        VERSION=${GITHUB_REF_NAME#v}
+        python - <<EOF
+import re, pathlib
+fp = pathlib.Path('version.py')
+text = fp.read_text()
+text = re.sub(r'docs_version = "[^"]+"', f'docs_version = "{VERSION}"', text)
+text = re.sub(r'package_version = "[^"]+"', f'package_version = "{VERSION}"', text)
+fp.write_text(text)
+EOF
+        python build-tools/version_updater.py
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add README.md docs/docs/index.md setup.py pypicosdk/version.py version.py pyproject.toml
+        git commit -m "chore: update versions for ${VERSION}" || echo "No changes to commit"
+        git push
 
     - name: Create SDK directory
       shell: pwsh
