@@ -3,20 +3,18 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 # Configuration
-# Desired ADC sample rate in mega-samples per second.
-SAMPLE_RATE_MSPS = 250
-# Serial bit rate in mega-bits per second. The sample rate should be an
-# integer multiple of the bit rate for best results.
-BIT_RATE_MBPS = 5
-# Number of samples captured in each block.
-SAMPLES = 1000
-# Number of blocks to capture and overlay in the eye diagram.
-CAPTURES = 20
-# Channel and input range used for the acquisition.
+# Assume a 10:1 probe on an I²C bus that switches between 0 and 5 V.  With the
+# probe attenuation the scope sees a 0–0.5 V signal, so a ±500 mV range is
+# suitable.
+SAMPLE_RATE_MSPS = 40  # ADC sample rate in mega-samples per second
+BIT_RATE_MBPS = 0.4   # Serial bit rate (400 kbps)
+SAMPLES = 1000        # Samples captured in each block
+CAPTURES = 20         # Blocks overlaid in the eye diagram
 CHANNEL = psdk.CHANNEL.A
 RANGE = psdk.RANGE.mV500
 
-# Derived value: number of ADC samples representing one bit/symbol.
+# Derived value: number of ADC samples representing one bit/symbol.  With the
+# default values above this is 100 samples per I²C bit.
 SAMPLES_PER_SYMBOL = int(SAMPLE_RATE_MSPS / BIT_RATE_MBPS)
 
 # Initialise device
@@ -33,11 +31,12 @@ scope.set_channel(channel=psdk.CHANNEL.D, enabled=0, range=RANGE)
 # Convert the desired sample rate into a driver-specific timebase value.
 TIMEBASE = scope.sample_rate_to_timebase(SAMPLE_RATE_MSPS, psdk.SAMPLE_RATE.MSPS)
 
-# Setup trigger
+# Setup trigger.  250 mV at the scope corresponds to a mid-level threshold on a
+# 0–5 V I²C bus when using a 10:1 probe.
 scope.set_simple_trigger(
     channel=CHANNEL,
-    threshold_mv=200,
-    direction=psdk.TRIGGER_DIR.RISING,
+    threshold_mv=250,
+    direction=psdk.TRIGGER_DIR.RISING_OR_FALLING,
     auto_trigger_ms=0,
 )
 
