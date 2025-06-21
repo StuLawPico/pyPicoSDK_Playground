@@ -7,21 +7,37 @@ SAMPLE_RATE_MSPS = 250  # Desired sample rate in MS/s
 SAMPLES = 1000
 CAPTURES = 20
 CHANNEL = psdk.CHANNEL.A
-RANGE = psdk.RANGE.V1
+RANGE = psdk.RANGE.mV500
 SAMPLES_PER_SYMBOL = 50
 
 # Initialise device
 scope = psdk.ps6000a()
 scope.open_unit()
+
+# Configure channels before calculating the timebase. The SDK requires at least
+# one channel to be enabled for ``sample_rate_to_timebase`` to succeed.
+scope.set_channel(channel=psdk.CHANNEL.A, coupling=psdk.COUPLING.DC, range=RANGE)
+scope.set_channel(channel=psdk.CHANNEL.B, enabled=0, range=RANGE)
+scope.set_channel(channel=psdk.CHANNEL.C, enabled=0, range=RANGE)
+scope.set_channel(channel=psdk.CHANNEL.D, enabled=0, range=RANGE)
+
 TIMEBASE = scope.sample_rate_to_timebase(SAMPLE_RATE_MSPS, psdk.SAMPLE_RATE.MSPS)
 
-# Setup channel and trigger
-scope.set_channel(channel=CHANNEL, range=RANGE)
-scope.set_simple_trigger(channel=CHANNEL, threshold_mv=0)
+# Setup trigger
+scope.set_simple_trigger(
+    channel=CHANNEL,
+    threshold_mv=200,
+    direction=psdk.TRIGGER_DIR.RISING,
+    auto_trigger_ms=0,
+)
 
 # Collect multiple captures
 captures = []
 for _ in range(CAPTURES):
+    # Re-enable the channel in case the driver resets its state between
+    # captures. This avoids "no channels or ports enabled" errors on some
+    # firmware versions.
+    scope.set_channel(channel=CHANNEL, coupling=psdk.COUPLING.DC, range=RANGE)
     buffers, time_axis = scope.run_simple_block_capture(
         timebase=TIMEBASE,
         samples=SAMPLES,
