@@ -3,12 +3,21 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 # Configuration
-SAMPLE_RATE_MSPS = 250  # Desired sample rate in MS/s
+# Desired ADC sample rate in mega-samples per second.
+SAMPLE_RATE_MSPS = 250
+# Serial bit rate in mega-bits per second. The sample rate should be an
+# integer multiple of the bit rate for best results.
+BIT_RATE_MBPS = 5
+# Number of samples captured in each block.
 SAMPLES = 1000
+# Number of blocks to capture and overlay in the eye diagram.
 CAPTURES = 20
+# Channel and input range used for the acquisition.
 CHANNEL = psdk.CHANNEL.A
 RANGE = psdk.RANGE.mV500
-SAMPLES_PER_SYMBOL = 50
+
+# Derived value: number of ADC samples representing one bit/symbol.
+SAMPLES_PER_SYMBOL = int(SAMPLE_RATE_MSPS / BIT_RATE_MBPS)
 
 # Initialise device
 scope = psdk.ps6000a()
@@ -21,6 +30,7 @@ scope.set_channel(channel=psdk.CHANNEL.B, enabled=0, range=RANGE)
 scope.set_channel(channel=psdk.CHANNEL.C, enabled=0, range=RANGE)
 scope.set_channel(channel=psdk.CHANNEL.D, enabled=0, range=RANGE)
 
+# Convert the desired sample rate into a driver-specific timebase value.
 TIMEBASE = scope.sample_rate_to_timebase(SAMPLE_RATE_MSPS, psdk.SAMPLE_RATE.MSPS)
 
 # Setup trigger
@@ -46,12 +56,14 @@ for _ in range(CAPTURES):
 
 scope.close_unit()
 
-# Split each capture into segments for the eye diagram
+# Split each capture into symbol-sized segments for the eye diagram. Each
+# segment spans one bit and contains ``SAMPLES_PER_SYMBOL`` ADC samples.
 segments = []
 for buf in captures:
     for idx in range(0, len(buf) - SAMPLES_PER_SYMBOL + 1, SAMPLES_PER_SYMBOL):
         segments.append(buf[idx:idx + SAMPLES_PER_SYMBOL])
 
+# Time axis corresponding to the samples in a single symbol.
 segment_time = np.array(time_axis[:SAMPLES_PER_SYMBOL])
 segments_np = np.array(segments)
 
