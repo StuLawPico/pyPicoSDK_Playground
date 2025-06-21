@@ -57,6 +57,8 @@ for _ in range(NCAPTURES):
     uncorrected.append(waveform)
 
     # Retrieve trigger offset in nanoseconds and store corrected time axis
+    # Offsets smaller than roughly one-tenth of the sample period may not be
+    # reliable due to driver interpolation between samples.
     offset_ns = scope.get_trigger_time_offset(psdk.TIME_UNIT.NS)
     offsets.append(offset_ns)
     corrected_time_axes.append(np.array(time_axis) - offset_ns)
