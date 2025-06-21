@@ -13,10 +13,14 @@ SAMPLES_PER_SYMBOL = 50
 # Initialise device
 scope = psdk.ps6000a()
 scope.open_unit()
+
+# Configure the channel before calculating the timebase. The SDK requires at
+# least one channel to be enabled for ``sample_rate_to_timebase`` to succeed.
+scope.set_channel(channel=CHANNEL, range=RANGE)
+
 TIMEBASE = scope.sample_rate_to_timebase(SAMPLE_RATE_MSPS, psdk.SAMPLE_RATE.MSPS)
 
 # Setup channel and trigger
-scope.set_channel(channel=CHANNEL, range=RANGE)
 scope.set_simple_trigger(channel=CHANNEL, threshold_mv=0)
 
 # Collect multiple captures
