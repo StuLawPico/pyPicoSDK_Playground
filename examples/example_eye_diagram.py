@@ -1,8 +1,9 @@
 import pypicosdk as psdk
 from matplotlib import pyplot as plt
+import numpy as np
 
 # Configuration
-TIMEBASE = 2
+SAMPLE_RATE_MSPS = 250  # Desired sample rate in MS/s
 SAMPLES = 1000
 CAPTURES = 20
 CHANNEL = psdk.CHANNEL.A
@@ -12,6 +13,7 @@ SAMPLES_PER_SYMBOL = 50
 # Initialise device
 scope = psdk.ps6000a()
 scope.open_unit()
+TIMEBASE = scope.sample_rate_to_timebase(SAMPLE_RATE_MSPS, psdk.SAMPLE_RATE.MSPS)
 
 # Setup channel and trigger
 scope.set_channel(channel=CHANNEL, range=RANGE)
@@ -34,13 +36,30 @@ for buf in captures:
     for idx in range(0, len(buf) - SAMPLES_PER_SYMBOL + 1, SAMPLES_PER_SYMBOL):
         segments.append(buf[idx:idx + SAMPLES_PER_SYMBOL])
 
-# Plot overlay of segments
-segment_time = time_axis[:SAMPLES_PER_SYMBOL]
-for seg in segments:
-    plt.plot(segment_time, seg, color="C0", alpha=0.2)
+segment_time = np.array(time_axis[:SAMPLES_PER_SYMBOL])
+segments_np = np.array(segments)
 
+# Flatten arrays for 2D histogram
+times = np.tile(segment_time, len(segments_np))
+values = segments_np.flatten()
+
+hist, x_edges, y_edges = np.histogram2d(
+    times,
+    values,
+    bins=[SAMPLES_PER_SYMBOL, 200],
+)
+
+extent = [x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]]
+
+plt.imshow(
+    hist.T,
+    extent=extent,
+    origin="lower",
+    aspect="auto",
+    cmap="inferno",
+)
 plt.xlabel("Time (ns)")
 plt.ylabel("Amplitude (mV)")
 plt.title("Eye Diagram")
-plt.grid(True)
+plt.colorbar(label="Count")
 plt.show()
