@@ -451,15 +451,23 @@ class PicoScopeBase:
         """
         Get the trigger time offset for jitter correction in waveforms.
 
+        The driver interpolates between adjacent samples to estimate when the
+        trigger actually occurred.  This means the value returned can have a
+        very fine granularity—down to femtoseconds—even though the effective
+        resolution is usually limited to roughly one-tenth of the sampling
+        interval in real-world use.
+
         Args:
             time_unit (TIME_UNIT): Desired unit for the returned offset.
-            segment_index (int, optional): The memory segment to query. Default is 0.
+            segment_index (int, optional): The memory segment to query. Default
+                is 0.
 
         Returns:
             int: Trigger time offset converted to ``time_unit``.
 
         Raises:
-            PicoSDKException: If the function call fails or preconditions are not met.
+            PicoSDKException: If the function call fails or preconditions are
+                not met.
         """
         time = ctypes.c_int64()
         returned_unit = ctypes.c_int32()

@@ -23,6 +23,8 @@ buffers, time_axis = scope.run_simple_rapid_block_capture(
 )
 
 # Retrieve the trigger time offset for each capture
+# Values below roughly one-tenth of the sample period may not be reliable
+# because the driver interpolates between samples.
 offsets = scope.get_values_trigger_time_offset_bulk(0, CAPTURES - 1)
 for i, (offset, unit) in enumerate(offsets):
     print(f"Segment {i}: offset = {offset} {unit.name}")
