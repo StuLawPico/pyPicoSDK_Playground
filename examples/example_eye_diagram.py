@@ -22,6 +22,10 @@ scope.set_simple_trigger(channel=CHANNEL, threshold_mv=0)
 # Collect multiple captures
 captures = []
 for _ in range(CAPTURES):
+    # Re-enable the channel in case the driver resets its state between
+    # captures. This avoids "no channels or ports enabled" errors on some
+    # firmware versions.
+    scope.set_channel(channel=CHANNEL, range=RANGE)
     buffers, time_axis = scope.run_simple_block_capture(
         timebase=TIMEBASE,
         samples=SAMPLES,
