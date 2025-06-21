@@ -36,7 +36,6 @@ for buf in captures:
     for idx in range(0, len(buf) - SAMPLES_PER_SYMBOL + 1, SAMPLES_PER_SYMBOL):
         segments.append(buf[idx:idx + SAMPLES_PER_SYMBOL])
 
-# Build heatmap of waveform density
 segment_time = np.array(time_axis[:SAMPLES_PER_SYMBOL])
 segments_np = np.array(segments)
 
