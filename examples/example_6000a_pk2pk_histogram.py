@@ -21,15 +21,15 @@ import pypicosdk as psdk
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Pico examples use inline argument values for clarity
+
 # Scope setup
 scope = psdk.ps6000a()
 scope.open_unit(resolution=psdk.RESOLUTION._12BIT)
 
-# Set channels
-channel = psdk.CHANNEL.A
-
-scope.set_channel(channel=channel, coupling=psdk.COUPLING.DC, range=psdk.RANGE.mV500)
-scope.set_simple_trigger(channel=channel, threshold_mv=200, direction=psdk.TRIGGER_DIR.RISING, auto_trigger_ms=0)
+# Set channels (inline arguments)
+scope.set_channel(channel=psdk.CHANNEL.A, coupling=psdk.COUPLING.DC, range=psdk.RANGE.mV500)
+scope.set_simple_trigger(channel=psdk.CHANNEL.A, threshold_mv=200, direction=psdk.TRIGGER_DIR.RISING, auto_trigger_ms=0)
 
 # Setup SigGen
 scope.set_siggen(frequency=1000, pk2pk=0.9, wave_type=psdk.WAVEFORM.SINE)
@@ -50,7 +50,7 @@ for _ in range(nCaptures):
     )
 
     # Add channel data to list
-    waveform = channel_buffer[channel]
+    waveform = channel_buffer[psdk.CHANNEL.A]
     waveforms.append(waveform)
 
     # Calculate pk2pk values, add to list

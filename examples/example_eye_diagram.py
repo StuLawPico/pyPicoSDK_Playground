@@ -2,6 +2,8 @@ import pypicosdk as psdk
 from matplotlib import pyplot as plt
 import numpy as np
 
+# Pico examples use inline argument values for clarity
+
 # Configuration
 # Capture a CAN H signal using a 10:1 probe. The bus typically swings between
 # roughly 1.5–3.5 V, so with the probe attenuation the scope sees about
@@ -11,8 +13,6 @@ SAMPLE_RATE_MSPS = 40  # ADC sample rate in mega-samples per second
 BIT_RATE_MBPS = 0.4   # CAN bit rate (400 kbps)
 SAMPLES = 1000        # Samples captured in each block
 CAPTURES = 20         # Blocks overlaid in the eye diagram
-CHANNEL = psdk.CHANNEL.A
-RANGE = psdk.RANGE.V1
 
 # Derived value: number of ADC samples representing one bit/symbol.  With the
 # default values above this is 100 samples per CAN bit.
@@ -25,9 +25,9 @@ scope.open_unit()
 # Configure channels before calculating the timebase. The SDK requires at least
 # one channel to be enabled for ``sample_rate_to_timebase`` to succeed.
 scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1, probe_scale=10, offset=-0.3)
-scope.set_channel(channel=psdk.CHANNEL.B, enabled=0, range=RANGE)
-scope.set_channel(channel=psdk.CHANNEL.C, enabled=0, range=RANGE)
-scope.set_channel(channel=psdk.CHANNEL.D, enabled=0, range=RANGE)
+scope.set_channel(channel=psdk.CHANNEL.B, enabled=0, range=psdk.RANGE.V1)
+scope.set_channel(channel=psdk.CHANNEL.C, enabled=0, range=psdk.RANGE.V1)
+scope.set_channel(channel=psdk.CHANNEL.D, enabled=0, range=psdk.RANGE.V1)
 
 # Convert the desired sample rate into a driver-specific timebase value.
 TIMEBASE = scope.sample_rate_to_timebase(SAMPLE_RATE_MSPS, psdk.SAMPLE_RATE.MSPS)
@@ -35,7 +35,7 @@ TIMEBASE = scope.sample_rate_to_timebase(SAMPLE_RATE_MSPS, psdk.SAMPLE_RATE.MSPS
 # Setup trigger.
 # 250 mV at the scope corresponds to a mid-level threshold on a CAN H signal when using a 10:1 probe.
 scope.set_simple_trigger(
-    channel=CHANNEL,
+    channel=psdk.CHANNEL.A,
     threshold_mv=250,
     direction=psdk.TRIGGER_DIR.RISING_OR_FALLING,
     auto_trigger_ms=0,
@@ -48,7 +48,7 @@ for _ in range(CAPTURES):
         timebase=TIMEBASE,
         samples=SAMPLES,
     )
-    captures.append(buffers[CHANNEL])
+    captures.append(buffers[psdk.CHANNEL.A])
 
 scope.close_unit()
 

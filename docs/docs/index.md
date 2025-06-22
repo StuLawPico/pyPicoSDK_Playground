@@ -29,6 +29,30 @@ The output should be similar to:
 
 Once tested, try an [example script from github](https://github.com/StuLawPico/pyPicoSDK_Playground) to get started.
 
+### Example style
+Examples use inline arguments so that each API call shows the exact values used.
+For instance:
+
+```python
+scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1)
+```
+
+You can store these values in variables if you prefer:
+
+```python
+RANGE = psdk.RANGE.V1
+scope.set_channel(channel=psdk.CHANNEL.A, range=RANGE)
+```
+
+Most examples select a timebase via ``sample_rate_to_timebase`` and include
+commented alternatives for direct timebase or interval conversion:
+
+```python
+TIMEBASE = scope.sample_rate_to_timebase(50, psdk.SAMPLE_RATE.MSPS)
+# TIMEBASE = 2  # direct driver timebase
+# TIMEBASE = scope.interval_to_timebase(20E-9)
+```
+
 ### Struct field names
 Many functions return data using ``ctypes`` structures. The attributes of
 these structures include a trailing underscore in their names. Use the

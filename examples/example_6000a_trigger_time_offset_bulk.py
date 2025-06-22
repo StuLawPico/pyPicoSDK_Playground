@@ -1,17 +1,21 @@
 import pypicosdk as psdk
 
+# Pico examples use inline argument values for clarity
+
 # Capture configuration
-TIMEBASE = 2
 SAMPLES = 1000
 CAPTURES = 4
-CHANNEL = psdk.CHANNEL.A
-RANGE = psdk.RANGE.V1
 
 # Initialize and configure the scope
 scope = psdk.ps6000a()
 scope.open_unit()
-scope.set_channel(CHANNEL, RANGE)
-scope.set_simple_trigger(CHANNEL, threshold_mv=0)
+scope.set_channel(psdk.CHANNEL.A, psdk.RANGE.V1)
+scope.set_simple_trigger(psdk.CHANNEL.A, threshold_mv=0)
+
+# Preferred: convert sample rate to timebase
+TIMEBASE = scope.sample_rate_to_timebase(50, psdk.SAMPLE_RATE.MSPS)
+# TIMEBASE = 2  # direct driver timebase
+# TIMEBASE = scope.interval_to_timebase(20E-9)
 
 # Acquire multiple waveforms in rapid block mode
 buffers, time_axis = scope.run_simple_rapid_block_capture(
