@@ -1,6 +1,5 @@
 import pypicosdk as psdk
 from matplotlib import pyplot as plt
-from matplotlib.colors import LogNorm
 import numpy as np
 
 # Pico examples use inline argument values for clarity
@@ -17,8 +16,9 @@ BIT_RATE_MBPS = 0.4   # CAN bit rate (400 kbps)
 # default values above this is 100 samples per CAN bit.
 SAMPLES_PER_SYMBOL = int(SAMPLE_RATE_MSPS / BIT_RATE_MBPS)
 
-# Capture one symbol per block
-SAMPLES = SAMPLES_PER_SYMBOL
+# Capture two symbols per block so the triggered bit is centred with
+# half a bit of context either side
+SAMPLES = SAMPLES_PER_SYMBOL * 2
 CAPTURES = 20  # Blocks overlaid in the eye diagram
 
 # Initialise device
@@ -58,11 +58,14 @@ scope.set_trigger_channel_directions([
 ])
 
 # Collect multiple captures
+# Pre-trigger percentage aligns half a bit before the threshold crossing so the
+# triggered bit appears centred in the capture
+pre_trig_percent = int(round((SAMPLES_PER_SYMBOL / 2) / SAMPLES * 100))
 buffers, time_axis = scope.run_simple_rapid_block_capture(
     timebase=TIMEBASE,
     samples=SAMPLES,
     n_captures=CAPTURES,
-    pre_trig_percent=20,
+    pre_trig_percent=pre_trig_percent,
 )
 captures = buffers[psdk.CHANNEL.A]
 
@@ -81,18 +84,19 @@ values = segments_np.flatten()
 hist, x_edges, y_edges = np.histogram2d(
     times,
     values,
-    bins=[SAMPLES_PER_SYMBOL, 200],
+    bins=[SAMPLES, 200],
 )
 
 extent = [x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]]
 
+hist_log = np.log1p(hist)
+
 plt.imshow(
-    hist.T,
+    hist_log.T,
     extent=extent,
     origin="lower",
     aspect="auto",
     cmap="inferno",
-    norm=LogNorm(vmin=1),
 )
 plt.xlabel("Time (ns)")
 plt.ylabel("Amplitude (mV)")
