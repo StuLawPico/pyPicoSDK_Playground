@@ -1,5 +1,6 @@
 import pypicosdk as psdk
 from matplotlib import pyplot as plt
+from matplotlib.colors import LogNorm
 import numpy as np
 
 # Pico examples use inline argument values for clarity
@@ -61,6 +62,7 @@ buffers, time_axis = scope.run_simple_rapid_block_capture(
     timebase=TIMEBASE,
     samples=SAMPLES,
     n_captures=CAPTURES,
+    pre_trig_percent=20,
 )
 captures = buffers[psdk.CHANNEL.A]
 
@@ -90,6 +92,7 @@ plt.imshow(
     origin="lower",
     aspect="auto",
     cmap="inferno",
+    norm=LogNorm(vmin=1),
 )
 plt.xlabel("Time (ns)")
 plt.ylabel("Amplitude (mV)")
