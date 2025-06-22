@@ -17,4 +17,4 @@ The PicoScope (A) drivers are the latest generation of drivers from Pico Technol
  - PicoScope 5000**D**
  - PicoScope 6000**E**
 
-[Click here to see the current support for these wrappers.](../dev/current.md/)
+[Click here to see the current support for these wrappers.](../dev/current.md)
