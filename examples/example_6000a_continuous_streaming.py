@@ -19,6 +19,7 @@ from matplotlib import pyplot as plt
 from collections import deque
 from queue import Queue, Empty, Full
 import threading
+# Pico examples use inline argument values for clarity
 import time
 import psutil
 
@@ -33,7 +34,6 @@ sample_interval = 1
 sample_units = psdk.PICO_TIME_UNIT.US
 plot_samples = 5000  # samples shown on screen
 chunk_samples = 1000  # number of samples to read per iteration
-channel_a = psdk.CHANNEL.A
 voltage_range = psdk.RANGE.V1
 
 # SigGen variables
@@ -45,11 +45,11 @@ scope = psdk.ps6000a()
 scope.open_unit()
 
 # Output a sine wave to help visualise captured data
-scope.set_siggen(siggen_frequency, siggen_pk2pk, psdk.WAVEFORM.SINE)
+scope.set_siggen(frequency=1000, pk2pk=2, wave_type=psdk.WAVEFORM.SINE)
 
 # Setup channels and trigger
-scope.set_channel(channel=channel_a, range=voltage_range)
-scope.set_simple_trigger(channel=channel_a, threshold_mv=0)
+scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1)
+scope.set_simple_trigger(channel=psdk.CHANNEL.A, threshold_mv=0)
 
 # Allocate a buffer for streaming
 # The same buffer is reused on every read so we don't need to re-register it
@@ -94,7 +94,7 @@ def streaming_worker() -> None:
 
             to_read = min(available, chunk_samples)
             data_array = (psdk.PICO_STREAMING_DATA_INFO * 1)()
-            data_array[0].channel_ = channel_a
+            data_array[0].channel_ = psdk.CHANNEL.A
             data_array[0].mode_ = psdk.RATIO_MODE.RAW
             data_array[0].type_ = psdk.DATA_TYPE.INT16_T
             data_array[0].noOfSamples_ = to_read
@@ -107,7 +107,7 @@ def streaming_worker() -> None:
             if num:
                 mv = [
                     scope.adc_to_mv(sample, voltage_range)
-                    for sample in channels_buffer[channel_a][:num]
+                    for sample in channels_buffer[psdk.CHANNEL.A][:num]
                 ]
                 try:
                     data_queue.put(mv, timeout=0.1)

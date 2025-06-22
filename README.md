@@ -29,6 +29,29 @@ The output should be similar to:
 
 Once tested, try an [example script from github](https://github.com/StuLawPico/pyPicoSDK_Playground) to get started.
 
+## Example style
+All examples pass arguments inline when calling API functions. This keeps each
+call self-contained and helps highlight the values in use:
+
+```python
+scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1)
+```
+
+If you prefer, you can assign your own variables before calling the API:
+
+```python
+RANGE = psdk.RANGE.V1
+scope.set_channel(channel=psdk.CHANNEL.A, range=RANGE)
+```
+
+Timebase values are typically chosen using ``sample_rate_to_timebase``:
+
+```python
+TIMEBASE = scope.sample_rate_to_timebase(50, psdk.SAMPLE_RATE.MSPS)
+# TIMEBASE = 2  # direct driver timebase
+# TIMEBASE = scope.interval_to_timebase(20E-9)
+```
+
 ### Streaming Quickstart
 The following snippet performs a basic streaming capture using `run_simple_streaming_capture`:
 ```python

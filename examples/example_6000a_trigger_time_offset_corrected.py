@@ -2,6 +2,8 @@ import pypicosdk as psdk
 import matplotlib.pyplot as plt
 import numpy as np
 
+# Pico examples use inline argument values for clarity
+
 
 # Scope setup
 scope = psdk.ps6000a()
@@ -12,7 +14,6 @@ scope.set_channel(channel=psdk.CHANNEL.A, coupling=psdk.COUPLING.DC, range=psdk.
 scope.set_channel(channel=psdk.CHANNEL.B, enabled=0, coupling=psdk.COUPLING.DC, range=psdk.RANGE.mV500)
 scope.set_channel(channel=psdk.CHANNEL.C, enabled=0, coupling=psdk.COUPLING.DC, range=psdk.RANGE.mV500)
 scope.set_channel(channel=psdk.CHANNEL.D, enabled=0, coupling=psdk.COUPLING.DC, range=psdk.RANGE.mV500)
-channel = psdk.CHANNEL.A
 
 # Configure an advanced trigger on Channel A at 200 mV
 threshold_adc = scope.mv_to_adc(200, psdk.RANGE.V1)
@@ -53,7 +54,7 @@ for _ in range(NCAPTURES):
         samples=NSAMPLES,
         ratio_mode=psdk.RATIO_MODE.TRIGGER,
     )
-    waveform = buffers[channel]
+    waveform = buffers[psdk.CHANNEL.A]
     uncorrected.append(waveform)
 
     # Retrieve trigger offset in nanoseconds and store corrected time axis

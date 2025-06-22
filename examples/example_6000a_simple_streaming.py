@@ -1,12 +1,12 @@
 import pypicosdk as psdk
 from matplotlib import pyplot as plt
 
-# Setup variables
+# Pico examples use inline argument values for clarity
+
+# Streaming configuration
 sample_interval = 1
 sample_units = psdk.PICO_TIME_UNIT.US
 samples = 5000
-channel_a = psdk.CHANNEL.A
-range = psdk.RANGE.V1
 
 # SigGen variables
 siggen_frequency = 1000  # Hz
@@ -17,11 +17,11 @@ scope = psdk.ps6000a()
 scope.open_unit()
 
 # Output a sine wave to help visualise captured data
-scope.set_siggen(siggen_frequency, siggen_pk2pk, psdk.WAVEFORM.SINE)
+scope.set_siggen(frequency=1000, pk2pk=2, wave_type=psdk.WAVEFORM.SINE)
 
 # Setup channels and trigger
-scope.set_channel(channel=channel_a, range=range)
-scope.set_simple_trigger(channel=channel_a, threshold_mv=0)
+scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1)
+scope.set_simple_trigger(channel=psdk.CHANNEL.A, threshold_mv=0)
 
 # Run streaming capture
 channels, time_axis = scope.run_simple_streaming_capture(
@@ -37,7 +37,7 @@ channels, time_axis = scope.run_simple_streaming_capture(
 scope.close_unit()
 
 # Plot data to pyplot
-plt.plot(time_axis, channels[channel_a])
+plt.plot(time_axis, channels[psdk.CHANNEL.A])
 plt.xlabel("Time (s)")
 plt.ylabel("Amplitude (mV)")
 plt.grid(True)
