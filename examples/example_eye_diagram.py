@@ -3,18 +3,19 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 # Configuration
-# Assume a 10:1 probe on an I²C bus that switches between 0 and 5 V.  With the
-# probe attenuation the scope sees a 0–0.5 V signal, so a ±500 mV range is
-# suitable.
+# Capture a CAN H signal using a 10:1 probe. The bus typically swings between
+# roughly 1.5–3.5 V, so with the probe attenuation the scope sees about
+# 0.15–0.35 V. A ±1 V range with a slight negative offset keeps the high
+# level centred on the display.
 SAMPLE_RATE_MSPS = 40  # ADC sample rate in mega-samples per second
-BIT_RATE_MBPS = 0.4   # Serial bit rate (400 kbps)
+BIT_RATE_MBPS = 0.4   # CAN bit rate (400 kbps)
 SAMPLES = 1000        # Samples captured in each block
 CAPTURES = 20         # Blocks overlaid in the eye diagram
 CHANNEL = psdk.CHANNEL.A
-RANGE = psdk.RANGE.mV500
+RANGE = psdk.RANGE.V1
 
 # Derived value: number of ADC samples representing one bit/symbol.  With the
-# default values above this is 100 samples per I²C bit.
+# default values above this is 100 samples per CAN bit.
 SAMPLES_PER_SYMBOL = int(SAMPLE_RATE_MSPS / BIT_RATE_MBPS)
 
 # Initialise device
@@ -23,7 +24,7 @@ scope.open_unit()
 
 # Configure channels before calculating the timebase. The SDK requires at least
 # one channel to be enabled for ``sample_rate_to_timebase`` to succeed.
-scope.set_channel(channel=psdk.CHANNEL.A, coupling=psdk.COUPLING.DC, range=RANGE)
+scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1, probe_scale=10, offset=-0.3)
 scope.set_channel(channel=psdk.CHANNEL.B, enabled=0, range=RANGE)
 scope.set_channel(channel=psdk.CHANNEL.C, enabled=0, range=RANGE)
 scope.set_channel(channel=psdk.CHANNEL.D, enabled=0, range=RANGE)
@@ -31,8 +32,8 @@ scope.set_channel(channel=psdk.CHANNEL.D, enabled=0, range=RANGE)
 # Convert the desired sample rate into a driver-specific timebase value.
 TIMEBASE = scope.sample_rate_to_timebase(SAMPLE_RATE_MSPS, psdk.SAMPLE_RATE.MSPS)
 
-# Setup trigger.  250 mV at the scope corresponds to a mid-level threshold on a
-# 0–5 V I²C bus when using a 10:1 probe.
+# Setup trigger.
+# 250 mV at the scope corresponds to a mid-level threshold on a CAN H signal when using a 10:1 probe.
 scope.set_simple_trigger(
     channel=CHANNEL,
     threshold_mv=250,
@@ -43,10 +44,6 @@ scope.set_simple_trigger(
 # Collect multiple captures
 captures = []
 for _ in range(CAPTURES):
-    # Re-enable the channel in case the driver resets its state between
-    # captures. This avoids "no channels or ports enabled" errors on some
-    # firmware versions.
-    scope.set_channel(channel=CHANNEL, coupling=psdk.COUPLING.DC, range=RANGE)
     buffers, time_axis = scope.run_simple_block_capture(
         timebase=TIMEBASE,
         samples=SAMPLES,
