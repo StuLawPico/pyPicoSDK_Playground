@@ -916,9 +916,15 @@ class PicoScopeBase:
         )
         return buffer
     
-    def _set_data_buffer_ps6000a(self, channel, samples, segment=0,
-                                 datatype=DATA_TYPE.INT16_T, ratio_mode=RATIO_MODE.RAW,
-                                 action=ACTION.CLEAR_ALL | ACTION.ADD) -> ctypes.Array:
+    def _set_data_buffer_ps6000a(
+        self,
+        channel,
+        samples,
+        segment=0,
+        datatype=DATA_TYPE.INT16_T,
+        ratio_mode=RATIO_MODE.RAW,
+        action=ACTION.CLEAR_ALL | ACTION.ADD,
+    ) -> ctypes.Array | None:
         """
         Allocates and assigns a data buffer for a specified channel on the 6000A series.
 
@@ -931,30 +937,41 @@ class PicoScopeBase:
             action (ACTION, optional): Action to apply to the data buffer (e.g., CLEAR_ALL | ADD).
 
         Returns:
-            ctypes.Array: A ctypes array that will be populated with data during capture.
+            ctypes.Array | None: The allocated buffer or ``None`` when clearing existing buffers.
 
         Raises:
             PicoSDKException: If an unsupported data type is provided.
         """
-        if datatype == DATA_TYPE.INT8_T:     buffer = (ctypes.c_int8 * samples)
-        elif datatype == DATA_TYPE.INT16_T:  buffer = (ctypes.c_int16 * samples)
-        elif datatype == DATA_TYPE.INT32_T:  buffer = (ctypes.c_int32 * samples)
-        elif datatype == DATA_TYPE.INT64_T:  buffer = (ctypes.c_int64 * samples)
-        elif datatype == DATA_TYPE.UINT32_T: buffer = (ctypes.c_uint32 * samples)
-        else: raise PicoSDKException("Invalid datatype selected for buffer")
+        if samples == 0:
+            buffer = None
+            buf_ptr = None
+        else:
+            if datatype == DATA_TYPE.INT8_T:
+                ctype = ctypes.c_int8
+            elif datatype == DATA_TYPE.INT16_T:
+                ctype = ctypes.c_int16
+            elif datatype == DATA_TYPE.INT32_T:
+                ctype = ctypes.c_int32
+            elif datatype == DATA_TYPE.INT64_T:
+                ctype = ctypes.c_int64
+            elif datatype == DATA_TYPE.UINT32_T:
+                ctype = ctypes.c_uint32
+            else:
+                raise PicoSDKException("Invalid datatype selected for buffer")
 
-        buffer = buffer()
-        
+            buffer = (ctype * samples)()
+            buf_ptr = ctypes.byref(buffer)
+
         self._call_attr_function(
-            'SetDataBuffer',
+            "SetDataBuffer",
             self.handle,
             channel,
-            ctypes.byref(buffer),
+            buf_ptr,
             samples,
             datatype,
             segment,
             ratio_mode,
-            action
+            action,
         )
         return buffer
 
