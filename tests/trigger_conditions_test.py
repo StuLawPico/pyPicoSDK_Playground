@@ -11,7 +11,7 @@ if 'pypicosdk.pypicosdk' in sys.modules:
     del sys.modules['pypicosdk.pypicosdk']
 import pypicosdk
 from pypicosdk import ps6000a, CHANNEL, ACTION
-from pypicosdk.constants import PICO_CONDITION, PICO_TRIGGER_STATE
+from pypicosdk.constants import PICO_TRIGGER_STATE
 
 
 def test_set_trigger_channel_conditions_invocation():
@@ -25,8 +25,7 @@ def test_set_trigger_channel_conditions_invocation():
 
     scope._call_attr_function = fake_call
 
-    condition = PICO_CONDITION(CHANNEL.A, PICO_TRIGGER_STATE.TRUE)
-    scope.set_trigger_channel_conditions([condition], ACTION.CLEAR_ALL | ACTION.ADD)
+    scope.set_trigger_channel_conditions(CHANNEL.A, PICO_TRIGGER_STATE.TRUE, ACTION.CLEAR_ALL | ACTION.ADD)
     assert called['name'] == 'SetTriggerChannelConditions'
 
 
