@@ -17,8 +17,9 @@ scope.set_aux_io_mode(psdk.AUXIO_MODE.INPUT)
 scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1)
 
 # Trigger when AUX input is asserted
-condition = psdk.PICO_CONDITION(psdk.CHANNEL.TRIGGER_AUX, psdk.PICO_TRIGGER_STATE.TRUE)
-scope.set_trigger_channel_conditions([condition])
+scope.set_trigger_channel_conditions(
+    psdk.CHANNEL.TRIGGER_AUX, psdk.PICO_TRIGGER_STATE.TRUE
+)
 scope.set_simple_trigger(channel=psdk.CHANNEL.TRIGGER_AUX, threshold_mv=0)
 
 # Preferred: convert sample rate to timebase

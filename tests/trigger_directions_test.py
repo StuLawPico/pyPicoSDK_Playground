@@ -12,7 +12,6 @@ if 'pypicosdk.pypicosdk' in sys.modules:
 
 from pypicosdk import (
     ps6000a,
-    PICO_DIRECTION,
     PICO_THRESHOLD_DIRECTION,
     PICO_THRESHOLD_MODE,
 )
@@ -28,10 +27,7 @@ def test_set_trigger_channel_directions_invocation():
         return 0
 
     scope._call_attr_function = fake_call
-    direction = PICO_DIRECTION(
-        0,
-        PICO_THRESHOLD_DIRECTION.PICO_RISING,
-        PICO_THRESHOLD_MODE.PICO_LEVEL,
+    scope.set_trigger_channel_directions(
+        0, PICO_THRESHOLD_DIRECTION.PICO_RISING, PICO_THRESHOLD_MODE.PICO_LEVEL
     )
-    scope.set_trigger_channel_directions([direction])
     assert called['name'] == 'SetTriggerChannelDirections'

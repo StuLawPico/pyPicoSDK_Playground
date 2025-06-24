@@ -17,23 +17,18 @@ scope.set_channel(channel=psdk.CHANNEL.D, enabled=0, coupling=psdk.COUPLING.DC, 
 
 # Configure an advanced trigger on Channel A at 200 mV
 threshold_adc = scope.mv_to_adc(200, psdk.RANGE.V1)
-trigger_prop = psdk.PICO_TRIGGER_CHANNEL_PROPERTIES(
-    threshold_adc,
-    0,
-    threshold_adc,
-    0,
-    psdk.CHANNEL.A,
+scope.set_trigger_channel_properties(
+    threshold_adc, 0, threshold_adc, 0, psdk.CHANNEL.A
 )
-scope.set_trigger_channel_properties([trigger_prop])
-condition = psdk.PICO_CONDITION(psdk.CHANNEL.A, psdk.PICO_TRIGGER_STATE.TRUE)
-scope.set_trigger_channel_conditions([condition])
+scope.set_trigger_channel_conditions(
+    psdk.CHANNEL.A, psdk.PICO_TRIGGER_STATE.TRUE
+)
 
-direction = psdk.PICO_DIRECTION(
+scope.set_trigger_channel_directions(
     psdk.CHANNEL.A,
     psdk.PICO_THRESHOLD_DIRECTION.PICO_RISING,
     psdk.PICO_THRESHOLD_MODE.PICO_LEVEL,
 )
-scope.set_trigger_channel_directions([direction])
 
 # Use the signal generator as a source
 scope.set_siggen(frequency=1000, pk2pk=0.9, wave_type=psdk.WAVEFORM.SINE)

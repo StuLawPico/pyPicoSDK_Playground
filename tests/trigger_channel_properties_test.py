@@ -10,7 +10,7 @@ if 'pypicosdk.constants' in sys.modules:
 if 'pypicosdk.pypicosdk' in sys.modules:
     del sys.modules['pypicosdk.pypicosdk']
 
-from pypicosdk import ps6000a, PICO_TRIGGER_CHANNEL_PROPERTIES
+from pypicosdk import ps6000a
 
 
 def test_set_trigger_channel_properties_invocation():
@@ -23,6 +23,5 @@ def test_set_trigger_channel_properties_invocation():
         return 0
 
     scope._call_attr_function = fake_call
-    props = PICO_TRIGGER_CHANNEL_PROPERTIES(100, 10, -100, 10, 0)
-    scope.set_trigger_channel_properties([props])
+    scope.set_trigger_channel_properties(100, 10, -100, 10, 0)
     assert called['name'] == 'SetTriggerChannelProperties'
