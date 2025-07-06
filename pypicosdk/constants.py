@@ -366,9 +366,7 @@ class PICO_STREAMING_DATA_TRIGGER_INFO(ctypes.Structure):
     """Structure describing trigger information for streaming.
 
     All field names in this structure are defined with a trailing
-    underscore. These exact names must be used when accessing the
-    attributes returned by functions such as
-    :meth:`~pypicosdk.pypicosdk.PicoScopeBase.get_streaming_latest_values`.
+    underscore so they match the C structure exactly.
     """
 
     #: Mirror the 1-byte packing of the C ``PICO_STREAMING_DATA_TRIGGER_INFO``

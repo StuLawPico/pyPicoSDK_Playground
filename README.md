@@ -52,25 +52,6 @@ TIMEBASE = scope.sample_rate_to_timebase(50, psdk.SAMPLE_RATE.MSPS)
 # TIMEBASE = scope.interval_to_timebase(20E-9)
 ```
 
-### Streaming Quickstart
-The following snippet performs a basic streaming capture using `run_simple_streaming_capture`:
-```python
-import pypicosdk as psdk
-
-scope = psdk.ps6000a()
-scope.open_unit()
-scope.set_channel(psdk.CHANNEL.A, psdk.RANGE.V1)
-scope.set_simple_trigger(psdk.CHANNEL.A, threshold_mv=0)
-data, times = scope.run_simple_streaming_capture(
-    sample_interval=1,
-    sample_interval_time_units=psdk.PICO_TIME_UNIT.US,
-    samples=1000,
-    auto_stop=True,
-    datatype=psdk.DATA_TYPE.INT16_T,
-    ratio_mode=psdk.RATIO_MODE.RAW,
-)
-scope.close_unit()
-```
 
 ## Useful links and references
 - [Documentation & Reference](https://stulawpico.github.io/pyPicoSDK_Playground)
