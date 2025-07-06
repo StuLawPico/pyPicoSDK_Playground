@@ -16,18 +16,13 @@ scope.set_channel(channel=psdk.CHANNEL.C, enabled=0, coupling=psdk.COUPLING.DC, 
 scope.set_channel(channel=psdk.CHANNEL.D, enabled=0, coupling=psdk.COUPLING.DC, range=psdk.RANGE.mV500)
 
 # Configure an advanced trigger on Channel A at 200 mV
-threshold_adc = scope.mv_to_adc(200, psdk.RANGE.V1)
-scope.set_trigger_channel_properties(
-    threshold_adc, 0, threshold_adc, 0, psdk.CHANNEL.A
-)
-scope.set_trigger_channel_conditions(
-    psdk.CHANNEL.A, psdk.PICO_TRIGGER_STATE.TRUE
-)
-
-scope.set_trigger_channel_directions(
-    psdk.CHANNEL.A,
-    psdk.PICO_THRESHOLD_DIRECTION.PICO_RISING,
-    psdk.PICO_THRESHOLD_MODE.PICO_LEVEL,
+scope.set_advanced_trigger(
+    channel=psdk.CHANNEL.A,
+    state=psdk.PICO_TRIGGER_STATE.TRUE,
+    direction=psdk.PICO_THRESHOLD_DIRECTION.PICO_RISING,
+    threshold_mode=psdk.PICO_THRESHOLD_MODE.PICO_LEVEL,
+    threshold_upper_mv=200,
+    threshold_lower_mv=200,
 )
 
 # Use the signal generator as a source
