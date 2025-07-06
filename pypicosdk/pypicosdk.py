@@ -896,6 +896,66 @@ class PicoScopeBase:
             ctypes.byref(dir_struct),
             ctypes.c_int16(1),
         )
+
+    def set_advanced_trigger(
+        self,
+        channel: int,
+        state: int,
+        direction: int,
+        threshold_mode: int,
+        threshold_upper_mv: float,
+        threshold_lower_mv: float,
+        hysteresis_upper_mv: float = 0.0,
+        hysteresis_lower_mv: float = 0.0,
+        aux_output_enable: int = 0,
+        auto_trigger_ms: int = 0,
+        action: int = ACTION.CLEAR_ALL | ACTION.ADD,
+    ) -> None:
+        """Configure an advanced trigger in a single call.
+
+        This helper sets up the trigger condition, direction and properties
+        required for non\-simple triggers.
+
+        Args:
+            channel: Channel to monitor for the trigger condition.
+            state: Trigger state used with ``set_trigger_channel_conditions``.
+            direction: Trigger direction from
+                :class:`PICO_THRESHOLD_DIRECTION`.
+            threshold_mode: Threshold mode from :class:`PICO_THRESHOLD_MODE`.
+            threshold_upper_mv: Upper trigger threshold in millivolts.
+            threshold_lower_mv: Lower trigger threshold in millivolts.
+            hysteresis_upper_mv: Optional hysteresis for ``threshold_upper_mv``
+                in millivolts.
+            hysteresis_lower_mv: Optional hysteresis for ``threshold_lower_mv``
+                in millivolts.
+            aux_output_enable: Optional auxiliary output flag.
+            auto_trigger_ms: Auto\-trigger timeout in milliseconds. ``0`` waits
+                indefinitely.
+            action: Action flag for ``set_trigger_channel_conditions``.
+        """
+
+        if channel in self.range:
+            upper_adc = self.mv_to_adc(threshold_upper_mv, self.range[channel], channel)
+            lower_adc = self.mv_to_adc(threshold_lower_mv, self.range[channel], channel)
+            hyst_upper_adc = self.mv_to_adc(hysteresis_upper_mv, self.range[channel], channel)
+            hyst_lower_adc = self.mv_to_adc(hysteresis_lower_mv, self.range[channel], channel)
+        else:
+            upper_adc = int(threshold_upper_mv)
+            lower_adc = int(threshold_lower_mv)
+            hyst_upper_adc = int(hysteresis_upper_mv)
+            hyst_lower_adc = int(hysteresis_lower_mv)
+
+        self.set_trigger_channel_conditions(channel, state, action)
+        self.set_trigger_channel_directions(channel, direction, threshold_mode)
+        self.set_trigger_channel_properties(
+            upper_adc,
+            hyst_upper_adc,
+            lower_adc,
+            hyst_lower_adc,
+            channel,
+            aux_output_enable,
+            auto_trigger_ms * 1000,
+        )
     
     def set_data_buffer_for_enabled_channels():
         raise NotImplementedError("Method not yet available for this oscilloscope")
