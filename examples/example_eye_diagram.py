@@ -37,18 +37,15 @@ TIMEBASE = scope.sample_rate_to_timebase(SAMPLE_RATE_MSPS, psdk.SAMPLE_RATE.MSPS
 
 # Setup an advanced trigger.
 # 250 mV at the scope corresponds to a mid-level threshold on a CAN H signal when using a 10:1 probe.
-threshold_adc = scope.mv_to_adc(250, psdk.RANGE.V1)
-scope.set_trigger_channel_properties(
-    threshold_adc, 0, threshold_adc, 0, psdk.CHANNEL.A
+scope.set_advanced_trigger(
+    channel=psdk.CHANNEL.A,
+    state=psdk.PICO_TRIGGER_STATE.TRUE,
+    direction=psdk.PICO_THRESHOLD_DIRECTION.PICO_RISING_OR_FALLING,
+    threshold_mode=psdk.PICO_THRESHOLD_MODE.PICO_LEVEL,
+    threshold_upper_mv=250,
+    threshold_lower_mv=250,
 )
-scope.set_trigger_channel_conditions(
-    psdk.CHANNEL.A, psdk.PICO_TRIGGER_STATE.TRUE
-)
-scope.set_trigger_channel_directions(
-    psdk.CHANNEL.A,
-    psdk.PICO_THRESHOLD_DIRECTION.PICO_RISING_OR_FALLING,
-    psdk.PICO_THRESHOLD_MODE.PICO_LEVEL,
-)
+
 
 # Collect multiple captures
 # Pre-trigger percentage aligns half a bit before the threshold crossing so the
