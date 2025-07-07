@@ -5,14 +5,17 @@ from matplotlib import pyplot as plt
 
 # Capture configuration
 SAMPLES = 1000
-CAPTURES = 8
+CAPTURES = 25
 
 # Initialize scope
 scope = psdk.ps6000a()
 scope.open_unit()
 
+# Setup siggen
+scope.set_siggen(frequency=20E6, pk2pk=3, wave_type=psdk.WAVEFORM.SQUARE)
+
 # Configure channel and trigger
-scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1)
+scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V2)
 scope.set_simple_trigger(channel=psdk.CHANNEL.A, threshold_mv=0)
 
 # Convert desired sample rate to timebase
