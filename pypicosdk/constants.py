@@ -451,10 +451,14 @@ class PICO_TRIGGER_CHANNEL_PROPERTIES(ctypes.Structure):
 
 
 class PICO_CONDITION(ctypes.Structure):
-    """Trigger condition structure used by ``SetTriggerChannelConditions``.
+    """Trigger condition used by ``SetTriggerChannelConditions``.
 
     Each instance defines the state that a particular input source must meet
     for the overall trigger to occur.
+
+    Attributes:
+        source_: Channel being monitored as a :class:`CHANNEL` value.
+        condition_: Desired state from :class:`PICO_TRIGGER_STATE`.
     """
 
     #: Ensure this structure matches the 1-byte packed layout used in the
@@ -497,7 +501,13 @@ class PICO_THRESHOLD_MODE(IntEnum):
 
 
 class PICO_DIRECTION(ctypes.Structure):
-    """Structure used by ``SetTriggerChannelDirections`` to specify trigger directions."""
+    """Direction descriptor for ``SetTriggerChannelDirections``.
+
+    Attributes:
+        channel_: Channel index as a :class:`CHANNEL` value.
+        direction_: Direction from :class:`PICO_THRESHOLD_DIRECTION`.
+        thresholdMode_: Threshold mode from :class:`PICO_THRESHOLD_MODE`.
+    """
 
     _pack_ = 1
 

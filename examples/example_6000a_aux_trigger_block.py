@@ -16,11 +16,16 @@ scope.set_aux_io_mode(psdk.AUXIO_MODE.INPUT)
 # Enable Channel A (inline arguments)
 scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1)
 
-# Trigger when AUX input is asserted
+# Trigger when AUX input is asserted using advanced trigger APIs
 scope.set_trigger_channel_conditions(
     psdk.CHANNEL.TRIGGER_AUX, psdk.PICO_TRIGGER_STATE.TRUE
 )
-scope.set_simple_trigger(channel=psdk.CHANNEL.TRIGGER_AUX, threshold_mv=0)
+scope.set_trigger_channel_directions(
+    channel=psdk.CHANNEL.TRIGGER_AUX,
+    direction=psdk.PICO_THRESHOLD_DIRECTION.PICO_RISING,
+    threshold_mode=psdk.PICO_THRESHOLD_MODE.PICO_LEVEL,
+)
+scope.set_trigger_channel_properties(0, 0, 0, 0, psdk.CHANNEL.TRIGGER_AUX)
 
 # Preferred: convert sample rate to timebase
 TIMEBASE = scope.sample_rate_to_timebase(50, psdk.SAMPLE_RATE.MSPS)
