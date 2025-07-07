@@ -1,10 +1,9 @@
 ##################################################################
-# FFT example for a PicoScope 6000E.
+# Histogram example for a PicoScope 6000E.
 #
 # Description:
 #   This example script captures multiple signals and displays
-#   a histogram of captured peak-to-peak (pk2pk) values along
-#   with similar measurements
+#   a histogram of captured peak-to-peak (pk2pk) values.
 #
 # Requirements: 
 # - PicoScope 6000E
@@ -12,8 +11,8 @@
 #   pip install matplotlib scipy numpy pypicosdk
 #
 # Setup:
-#   - Connect 6000E SigGen (AWG) to Channel A of the oscilloscope
-#     using a BNC cable or probe
+#   - Connect 6000E (preferebly with FlexRes) SigGen (AWG) to 
+#     Channel A of the oscilloscope using a BNC cable or probe
 #
 ##################################################################
 
