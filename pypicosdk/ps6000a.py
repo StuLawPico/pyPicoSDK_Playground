@@ -199,7 +199,6 @@ class ps6000a(PicoScopeBase):
     def set_simple_trigger(self, channel, threshold_mv=0, enable=True, direction=TRIGGER_DIR.RISING, delay=0, auto_trigger_ms=5_000):
         """
         Sets up a simple trigger from a specified channel and threshold in mV.
-        NOTE: When using TRIGGER_AUX, threshold is fixed at 1.25 V - threshold_mv is not needed.
 
         Args:
             channel (int): The input channel to apply the trigger to.
@@ -208,6 +207,11 @@ class ps6000a(PicoScopeBase):
             direction (TRIGGER_DIR, optional): Trigger direction (e.g., TRIGGER_DIR.RISING, TRIGGER_DIR.FALLING). 
             delay (int, optional): Delay in samples after the trigger condition is met before starting capture. 
             auto_trigger_ms (int, optional): Timeout in milliseconds after which data capture proceeds even if no trigger occurs. 
+
+        Examples:
+            When using TRIGGER_AUX, threshold is fixed to 1.25 V
+            >>> scope.set_simple_trigger(channel=psdk.CHANNEL.TRIGGER_AUX)
+           
         """
         auto_trigger_us = auto_trigger_ms * 1000
         return super().set_simple_trigger(channel, threshold_mv, enable, direction, delay, auto_trigger_us)
