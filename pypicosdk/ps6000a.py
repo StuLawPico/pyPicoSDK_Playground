@@ -1,6 +1,6 @@
 import ctypes
 from .constants import *
-from .base import PicoScopeBase
+from .base import PicoSDKException, PicoScopeBase
 
 class ps6000a(PicoScopeBase):
     """PicoScope 6000 (A) API specific functions"""
