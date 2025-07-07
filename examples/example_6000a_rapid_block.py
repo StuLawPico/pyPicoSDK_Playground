@@ -29,8 +29,9 @@ buffers, time_axis = scope.run_simple_rapid_block_capture(
 
 scope.close_unit()
 
-# Plot the first capture as an example
-plt.plot(time_axis, buffers[psdk.CHANNEL.A][0])
+# Overlay all captures on a single plot
+for wf in buffers[psdk.CHANNEL.A]:
+    plt.plot(time_axis, wf, alpha=0.3)
 plt.xlabel("Time (ns)")
 plt.ylabel("Amplitude (mV)")
 plt.grid(True)
