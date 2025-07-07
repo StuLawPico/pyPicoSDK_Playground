@@ -15,6 +15,9 @@ scope.open_unit()
 scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1)
 scope.set_simple_trigger(channel=psdk.CHANNEL.A, threshold_mv=0)
 
+# Setup SigGen
+scope.set_siggen(frequency=100_000, pk2pk=0.8, wave_type=psdk.WAVEFORM.SINE)
+
 # Preferred: convert sample rate to timebase
 TIMEBASE = scope.sample_rate_to_timebase(50, psdk.SAMPLE_RATE.MSPS)
 # TIMEBASE = 2  # direct driver timebase
