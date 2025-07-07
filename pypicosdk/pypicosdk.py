@@ -420,7 +420,7 @@ class PicoScopeBase:
         """
         Gets the ADC limits for specified devices.
 
-        Currently tested on: 5000a.
+        Currently tested on: 6000a.
 
         Returns:
                 int: Maximum ADC value.
@@ -768,18 +768,6 @@ class PicoScopeBase:
         )
         return self._error_handler(status)
     
-    def _set_channel(self, channel, range, enabled=True, coupling=COUPLING.DC, offset=0.0):
-        """Set a channel ON with a specified range (5000D)"""
-        self.range[channel] = range
-        status = self.dll.ps5000aSetChannel(
-            self.handle,
-            channel,
-            enabled,
-            coupling,
-            range,
-            ctypes.c_float(offset)
-        )
-        return self._error_handler(status)
     
     def set_simple_trigger(self, channel, threshold_mv, enable=True, direction=TRIGGER_DIR.RISING, delay=0, auto_trigger=0):
         """Configure a simple edge trigger.
@@ -960,20 +948,6 @@ class PicoScopeBase:
     def set_data_buffer_for_enabled_channels():
         raise NotImplementedError("Method not yet available for this oscilloscope")
     
-    def _set_data_buffer_ps5000a(self, channel, samples, segment=0, ratio_mode=0):
-        """Set data buffer (5000D)"""
-        buffer = (ctypes.c_int16 * samples)
-        buffer = buffer()
-        self._call_attr_function(
-            'SetDataBuffer',
-            self.handle,
-            channel,
-            ctypes.byref(buffer),
-            samples,
-            segment,
-            ratio_mode
-        )
-        return buffer
     
     def _set_data_buffer_ps6000a(
         self,
@@ -1851,66 +1825,6 @@ class ps6000a(PicoScopeBase):
         return channels_buffer, time_axis
 
     
-class ps5000a(PicoScopeBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__("ps5000a", *args, **kwargs)
-
-    def open_unit(self, serial_number=None, resolution=RESOLUTION):
-        status = super()._open_unit(serial_number, resolution)
-        self.max_adc_value = super()._get_maximum_adc_value()
-        return status
-
-    def set_channel(
-        self,
-        channel,
-        range,
-        enabled=True,
-        coupling=COUPLING.DC,
-        offset=0,
-        probe_scale: float = 1.0,
-    ):
-        """Configure an analog channel.
-
-        Args:
-            channel: Channel to configure.
-            range: Input range for the channel.
-            enabled: Enable or disable the channel.
-            coupling: Input coupling type.
-            offset: Analog offset in volts.
-            probe_scale: Probe attenuation factor such as 1 or 10.
-        """
-        self.probe_scale[channel] = probe_scale
-        return super()._set_channel(channel, range, enabled, coupling, offset)
-    
-    def get_timebase(self, timebase, samples, segment=0):
-        return super()._get_timebase_2(timebase, samples, segment)
-    
-    def set_simple_trigger(self, channel, threshold_mv, enable=True, direction=TRIGGER_DIR.RISING, delay=0, auto_trigger_ms=5000):
-        """
-        Sets up a simple trigger from a specified channel and threshold in mV
-
-        Args:
-            channel (int): The input channel to apply the trigger to.
-            threshold_mv (float): Trigger threshold level in millivolts.
-            enable (bool, optional): Enables or disables the trigger.
-            direction (TRIGGER_DIR, optional): Trigger direction (e.g., TRIGGER_DIR.RISING, TRIGGER_DIR.FALLING).
-            delay (int, optional): Delay in samples after the trigger condition is met before starting capture.
-            auto_trigger_ms (int, optional): Timeout in milliseconds after which data capture proceeds even if no trigger occurs.
-        """
-        auto_trigger_us = auto_trigger_ms * 1000
-        return super().set_simple_trigger(channel, threshold_mv, enable, direction, delay, auto_trigger_us)
-    
-    def set_data_buffer(self, channel, samples, segment=0, ratio_mode=0):
-        return super()._set_data_buffer_ps5000a(channel, samples, segment, ratio_mode)
-    
-    def set_data_buffer_for_enabled_channels(self, samples, segment=0, ratio_mode=0):
-        channels_buffer = {}
-        for channel in self.range:
-            channels_buffer[channel] = super()._set_data_buffer_ps5000a(channel, samples, segment, ratio_mode)
-        return channels_buffer
-    
-    def change_power_source(self, state):
-        return super()._change_power_source(state)
 
 
 # Build an explicit list of public names for ``from pypicosdk import *``.
@@ -1923,5 +1837,4 @@ __all__ = list(_constants.__all__) + [
     'get_all_enumerated_units',
     'PicoScopeBase',
     'ps6000a',
-    'ps5000a',
 ]
