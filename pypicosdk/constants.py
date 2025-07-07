@@ -419,6 +419,9 @@ class PICO_TRIGGER_INFO(ctypes.Structure):
         ("timeStampCounter_", ctypes.c_uint64),
     ]
 
+TIMESTAMP_COUNTER_MASK: int = (1 << 56) - 1
+"""Mask for the 56-bit ``timeStampCounter`` field."""
+
 
 class PICO_TRIGGER_CHANNEL_PROPERTIES(ctypes.Structure):
     """Trigger threshold configuration for a single channel.
@@ -547,6 +550,7 @@ __all__ = [
     'PICO_STREAMING_DATA_INFO',
     'PICO_STREAMING_DATA_TRIGGER_INFO',
     'PICO_TRIGGER_INFO',
+    'TIMESTAMP_COUNTER_MASK',
     'PICO_TRIGGER_CHANNEL_PROPERTIES',
     'PICO_CONDITION',
     'PICO_THRESHOLD_DIRECTION',
