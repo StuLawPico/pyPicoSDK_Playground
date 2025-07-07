@@ -18,5 +18,5 @@ scope.set_channel(CHANNEL.C, RANGE.mV100)
 
 # Return suggested timebase and actual sample interval 
 print(scope.sample_rate_to_timebase(100, unit=SAMPLE_RATE.MSPS))
-print(scope.interval_to_timebase(0.001, unit=TIME_UNIT.US))
-print(scope.get_nearest_sampling_interval(1E-9))
+print(scope.interval_to_timebase(0.01, unit=TIME_UNIT.US))
+print(scope.get_nearest_sampling_interval(10E-9))
