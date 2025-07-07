@@ -889,7 +889,7 @@ class PicoScopeBase:
         """Configure an advanced trigger in a single call.
 
         This helper sets up the trigger condition, direction and properties
-        required for non\-simple triggers.
+        required for non-simple triggers.
 
         Args:
             channel: Channel to monitor for the trigger condition.
@@ -904,7 +904,7 @@ class PicoScopeBase:
             hysteresis_lower_mv: Optional hysteresis for ``threshold_lower_mv``
                 in millivolts.
             aux_output_enable: Optional auxiliary output flag.
-            auto_trigger_ms: Auto\-trigger timeout in milliseconds. ``0`` waits
+            auto_trigger_ms: Auto-trigger timeout in milliseconds. ``0`` waits
                 indefinitely.
             action: Action flag for ``set_trigger_channel_conditions``.
         """
