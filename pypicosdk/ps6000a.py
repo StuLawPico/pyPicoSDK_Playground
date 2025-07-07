@@ -196,9 +196,10 @@ class ps6000a(PicoScopeBase):
             mode,
         )
 
-    def set_simple_trigger(self, channel, threshold_mv, enable=True, direction=TRIGGER_DIR.RISING, delay=0, auto_trigger_ms=5_000):
+    def set_simple_trigger(self, channel, threshold_mv=0, enable=True, direction=TRIGGER_DIR.RISING, delay=0, auto_trigger_ms=5_000):
         """
-        Sets up a simple trigger from a specified channel and threshold in mV
+        Sets up a simple trigger from a specified channel and threshold in mV.
+        NOTE: When using TRIGGER_AUX, threshold is fixed at 1.25 V - threshold_mv is not needed.
 
         Args:
             channel (int): The input channel to apply the trigger to.
