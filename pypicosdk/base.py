@@ -789,13 +789,17 @@ class PicoScopeBase:
         state: int,
         action: int = ACTION.CLEAR_ALL | ACTION.ADD,
     ) -> None:
-        """Configure a trigger condition using ``SetTriggerChannelConditions``.
+        """Configure a trigger condition.
+
+        This wraps the PicoSDK ``SetTriggerChannelConditions`` call.  The
+        ``source`` channel is compared against ``state`` and combined with any
+        existing conditions according to ``action``.
 
         Args:
-            source: Input source for the condition as a :class:`CHANNEL` value.
-            state: Desired trigger state from :class:`PICO_TRIGGER_STATE`.
-            action: How to apply the condition relative to any existing
-                configuration. Defaults to ``ACTION.CLEAR_ALL | ACTION.ADD``.
+            source (int): Input source as a :class:`CHANNEL` value.
+            state (int): Desired state from :class:`PICO_TRIGGER_STATE`.
+            action (int, optional): How to apply this condition relative to any
+                previous configuration. Defaults to ``ACTION.CLEAR_ALL | ACTION.ADD``.
         """
 
         cond = PICO_CONDITION(source, state)
@@ -818,17 +822,20 @@ class PicoScopeBase:
         aux_output_enable: int = 0,
         auto_trigger_us: int = 0,
     ) -> None:
-        """Configure trigger thresholds using ``SetTriggerChannelProperties``.
+        """Configure trigger thresholds for ``channel``.
+
+        This method exposes the PicoSDK ``SetTriggerChannelProperties`` API. All
+        threshold and hysteresis values are specified in ADC counts.
 
         Args:
-            threshold_upper: ADC value for the upper trigger level.
-            hysteresis_upper: Hysteresis for ``threshold_upper`` in ADC counts.
-            threshold_lower: ADC value for the lower trigger level.
-            hysteresis_lower: Hysteresis for ``threshold_lower`` in ADC counts.
-            channel: Channel these settings apply to.
-            aux_output_enable: Optional auxiliary output flag.
-            auto_trigger_us: Auto-trigger timeout in microseconds. ``0`` waits
-                indefinitely.
+            threshold_upper (int): Upper trigger level.
+            hysteresis_upper (int): Hysteresis for ``threshold_upper``.
+            threshold_lower (int): Lower trigger level.
+            hysteresis_lower (int): Hysteresis for ``threshold_lower``.
+            channel (int): Target channel as a :class:`CHANNEL` value.
+            aux_output_enable (int, optional): Auxiliary output flag.
+            auto_trigger_us (int, optional): Auto-trigger timeout in
+                microseconds. ``0`` waits indefinitely.
         """
 
         prop = PICO_TRIGGER_CHANNEL_PROPERTIES(
@@ -854,13 +861,16 @@ class PicoScopeBase:
         direction: int,
         threshold_mode: int,
     ) -> None:
-        """Configure trigger directions using ``SetTriggerChannelDirections``.
+        """Specify the trigger direction for ``channel``.
+
+        This method mirrors the PicoSDK ``SetTriggerChannelDirections`` call.
 
         Args:
-            channel: Channel to apply the direction to.
-            direction: Desired trigger direction from
+            channel (int): Channel to configure.
+            direction (int): Direction value from
                 :class:`PICO_THRESHOLD_DIRECTION`.
-            threshold_mode: Threshold mode from :class:`PICO_THRESHOLD_MODE`.
+            threshold_mode (int): Threshold mode from
+                :class:`PICO_THRESHOLD_MODE`.
         """
 
         dir_struct = PICO_DIRECTION(channel, direction, threshold_mode)
