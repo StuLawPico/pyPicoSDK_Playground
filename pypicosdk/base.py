@@ -683,7 +683,7 @@ class PicoScopeBase:
                 mv (float): Voltage in millivolts to be converted.
                 channel_range (int): Range of channel in millivolts i.e. 500 mV.
                 channel (CHANNEL, optional): Channel associated with ``mv``. The
-                    probe scaling for the channel will be applied if provided.
+                        probe scaling for the channel will be applied if provided.
 
         Returns:
                 int: ADC value corresponding to the input millivolt value.
