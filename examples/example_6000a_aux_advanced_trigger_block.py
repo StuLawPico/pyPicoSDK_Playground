@@ -10,9 +10,9 @@ SAMPLES = 50_000
 scope = psdk.ps6000a()
 scope.open_unit()
 
-# Setup SigGen to swing over 1.25 V threshold
+# Setup SigGen to swing above 1.25 V threshold (1.5 Vpk)
 # For demo, split SigGen output to TRIGGER_AUX and Channel A input
-scope.set_siggen(1E3, 3, psdk.WAVEFORM.SINE)
+scope.set_siggen(frequency=1000, pk2pk=3, wave_type=psdk.WAVEFORM.SINE)
 
 # Enable Channel A (inline arguments)
 scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1)
