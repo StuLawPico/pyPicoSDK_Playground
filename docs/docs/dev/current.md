@@ -5,6 +5,3 @@
 - Signal Generator
 
 
-## 5000 (A) API
-- Capture Modes
-    - Block Mode (Single Captures)
