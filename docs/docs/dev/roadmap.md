@@ -10,6 +10,5 @@
     - Current in [test pypi](https://test.pypi.org/project/pypicosdk/)
 
 ## To-Do
-- Add `run_simple_block_capture()` for 5000 (A)
 - Add support for 3000 (A) drivers
 - Test & add support for macOS & linux
