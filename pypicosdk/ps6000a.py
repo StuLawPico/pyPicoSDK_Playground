@@ -15,7 +15,6 @@ from .constants import (
     TRIGGER_STATE,
     THRESHOLD_MODE,
     THRESHOLD_DIRECTION,
-    CONDITIONS_INFO,
     RESOLUTION,
     TIME_UNIT,
     DIGITAL_PORT,
@@ -142,7 +141,7 @@ class ps6000a(PicoScopeBase):
         auto_trigger_us = auto_trigger_ms * 1000
         return super().set_trigger_channel_properties(properties, aux_output_enable, auto_trigger_us)
 
-    def set_advanced_trigger(self, properties, directions, conditions, aux_output_enable=0, auto_trigger_ms=0, action=CONDITIONS_INFO.CLEAR_CONDITIONS | CONDITIONS_INFO.ADD_CONDITION):
+    def set_advanced_trigger(self, properties, directions, conditions, aux_output_enable=0, auto_trigger_ms=0, action=ACTION.CLEAR_ALL | ACTION.ADD):
         """Configure an advanced trigger using millisecond units."""
 
         auto_trigger_us = auto_trigger_ms * 1000

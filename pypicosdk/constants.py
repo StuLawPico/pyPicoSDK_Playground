@@ -184,6 +184,11 @@ class CONDITION(ctypes.Structure):
     ]
 
 
+class PICO_CONDITION(CONDITION):
+    """Alias of :class:`CONDITION` for PicoSDK compatibility."""
+    pass
+
+
 class DIRECTION(ctypes.Structure):
     """Trigger direction for a channel."""
 
@@ -473,6 +478,7 @@ __all__ = [
     "CONDITIONS_INFO",
     "TRIGGER_CHANNEL_PROPERTIES",
     "CONDITION",
+    "PICO_CONDITION",
     "DIRECTION",
     "PICO_TRIGGER_INFO",
     "UNIT_INFO",

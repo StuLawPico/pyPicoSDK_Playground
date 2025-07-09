@@ -778,22 +778,30 @@ class PicoScopeBase:
 
     def set_trigger_channel_conditions(
         self,
-        conditions: dict,
-        action: CONDITIONS_INFO = CONDITIONS_INFO.CLEAR_CONDITIONS | CONDITIONS_INFO.ADD_CONDITION,
+        source: int,
+        state: int,
+        action: int = ACTION.CLEAR_ALL | ACTION.ADD,
     ) -> None:
-        """Set conditions combining multiple trigger sources."""
+        """Configure a trigger condition.
 
-        cond_array_type = CONDITION * len(conditions)
-        cond_array = cond_array_type()
-        for idx, (ch, state) in enumerate(conditions.items()):
-            cond_array[idx].source_ = ch
-            cond_array[idx].condition_ = state
+        This wraps the PicoSDK ``SetTriggerChannelConditions`` call.  The
+        ``source`` channel is compared against ``state`` and combined with any
+        existing conditions according to ``action``.
+
+        Args:
+            source (int): Input source as a :class:`CHANNEL` value.
+            state (int): Desired state from :class:`TRIGGER_STATE`.
+            action (int, optional): How to apply this condition relative to any
+                previous configuration. Defaults to ``ACTION.CLEAR_ALL | ACTION.ADD``.
+        """
+
+        cond = PICO_CONDITION(source, state)
 
         self._call_attr_function(
             "SetTriggerChannelConditions",
             self.handle,
-            cond_array,
-            len(conditions),
+            ctypes.byref(cond),
+            ctypes.c_int16(1),
             action,
         )
 
@@ -821,13 +829,15 @@ class PicoScopeBase:
         conditions: dict,
         aux_output_enable: int = 0,
         auto_trigger: int = 0,
-        action: CONDITIONS_INFO = CONDITIONS_INFO.CLEAR_CONDITIONS | CONDITIONS_INFO.ADD_CONDITION,
+        action: int = ACTION.CLEAR_ALL | ACTION.ADD,
     ) -> None:
         """Configure advanced trigger properties, directions and conditions."""
 
         self.set_trigger_channel_properties(properties, aux_output_enable, auto_trigger)
         self.set_trigger_channel_directions(directions)
-        self.set_trigger_channel_conditions(conditions, action)
+        for idx, (ch, state) in enumerate(conditions.items()):
+            cond_action = action if idx == 0 else ACTION.ADD
+            self.set_trigger_channel_conditions(ch, state, cond_action)
     
     def set_data_buffer_for_enabled_channels():
         raise NotImplemented("Method not yet available for this oscilloscope")
