@@ -1,4 +1,5 @@
 import ctypes
+
 from .constants import *
 from .base import PicoSDKException, PicoScopeBase
 
@@ -803,4 +804,34 @@ class ps6000a(PicoScopeBase):
         time_axis = self.get_time_axis(timebase, actual_samples)
 
         return channels_buffer, time_axis
+
+    def get_streaming_latest_values(
+        self, streaming_data_info: list[PICO_STREAMING_DATA_INFO]
+    ) -> tuple[list[PICO_STREAMING_DATA_INFO], PICO_STREAMING_DATA_TRIGGER_INFO]:
+        """Retrieve the most recent streaming data from the device.
+
+        Args:
+            streaming_data_info: list of
+                :class:`PICO_STREAMING_DATA_INFO` structures describing the
+                buffers to populate.
+
+        Returns:
+            tuple[list[PICO_STREAMING_DATA_INFO],
+            :class:`PICO_STREAMING_DATA_TRIGGER_INFO`]: ``(data_info, trigger)``
+            with updated streaming data and trigger information.
+        """
+
+        array_type = PICO_STREAMING_DATA_INFO * len(streaming_data_info)
+        data_array = array_type(*streaming_data_info)
+        trigger_info = PICO_STREAMING_DATA_TRIGGER_INFO()
+
+        self._call_attr_function(
+            "GetStreamingLatestValues",
+            self.handle,
+            data_array,
+            len(streaming_data_info),
+            ctypes.byref(trigger_info),
+        )
+
+        return list(data_array), trigger_info
 __all__ = ['ps6000a']
