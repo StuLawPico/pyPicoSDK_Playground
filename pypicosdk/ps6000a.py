@@ -142,6 +142,16 @@ class ps6000a(PicoScopeBase):
         auto_trigger_us = auto_trigger_ms * 1000
         return super().set_trigger_channel_properties(properties, aux_output_enable, auto_trigger_us)
 
+    def set_trigger_channel_conditions(self, conditions, action=CONDITIONS_INFO.CLEAR_CONDITIONS | CONDITIONS_INFO.ADD_CONDITION):
+        """Thin wrapper around :func:`~pypicosdk.base.PicoScopeBase.set_trigger_channel_conditions`."""
+
+        return super().set_trigger_channel_conditions(conditions, action)
+
+    def set_trigger_channel_directions(self, directions):
+        """Thin wrapper documenting ``set_trigger_channel_directions``."""
+
+        return super().set_trigger_channel_directions(directions)
+
     def set_advanced_trigger(self, properties, directions, conditions, aux_output_enable=0, auto_trigger_ms=0, action=CONDITIONS_INFO.CLEAR_CONDITIONS | CONDITIONS_INFO.ADD_CONDITION):
         """Configure an advanced trigger using millisecond units."""
 

@@ -89,6 +89,9 @@ class TRIGGER_STATE(IntEnum):
     TRUE = 1
     FALSE = 2
 
+
+PICO_TRIGGER_STATE = TRIGGER_STATE
+
 class THRESHOLD_MODE(IntEnum):
     """Threshold evaluation mode for trigger directions.
 
@@ -140,6 +143,12 @@ class THRESHOLD_DIRECTION(IntEnum):
     POSITIVE_RUNT = 9
     NEGATIVE_RUNT = 10
     NONE = RISING
+
+
+PICO_THRESHOLD_MODE = THRESHOLD_MODE
+
+
+PICO_THRESHOLD_DIRECTION = THRESHOLD_DIRECTION
 
 class CONDITIONS_INFO(IntEnum):
     """Actions when configuring multiple trigger conditions.
@@ -195,6 +204,15 @@ class DIRECTION(ctypes.Structure):
     ]
 
 
+PICO_DIRECTION = DIRECTION
+
+
+PICO_TRIGGER_CHANNEL_PROPERTIES = TRIGGER_CHANNEL_PROPERTIES
+
+
+PICO_CONDITION = CONDITION
+
+
 class PICO_TRIGGER_INFO(ctypes.Structure):
     """Trigger timing details returned by :func:`ps6000aGetTriggerInfo`."""
 
@@ -208,6 +226,22 @@ class PICO_TRIGGER_INFO(ctypes.Structure):
         ("missedTriggers_", ctypes.c_uint64),
         ("timeStampCounter_", ctypes.c_uint64),
     ]
+
+
+class PICO_STREAMING_DATA_TRIGGER_INFO(ctypes.Structure):
+    """Trigger info returned during streaming captures."""
+
+    _pack_ = 1
+    _fields_ = [
+        ("status_", ctypes.c_int32),
+        ("triggerTime_", ctypes.c_double),
+        ("timeUnits_", ctypes.c_int32),
+        ("timeStampCounter_", ctypes.c_uint64),
+        ("triggerIndex_", ctypes.c_uint64),
+    ]
+
+
+TIMESTAMP_COUNTER_MASK = 0x00FFFFFFFFFFFFFF
 
 
 class WAVEFORM(IntEnum):
@@ -265,6 +299,8 @@ class CHANNEL(IntEnum):
     F = 5
     G = 6 
     H = 7
+    TRIGGER_AUX = 8
+    EXTERNAL = 9
 
 
 CHANNEL_NAMES = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
@@ -385,7 +421,8 @@ class RATIO_MODE:
     AVERAGE = 4
     DISTRIBUTION = 8
     SUM = 16
-    TRIGGER_DATA_FOR_TIME_CALCUATION = 0x10000000
+    TRIGGER_DATA_FOR_TIME_CALCULATION = 0x10000000
+    TRIGGER_DATA_FOR_TIME_CALCUATION = TRIGGER_DATA_FOR_TIME_CALCULATION
     SEGMENT_HEADER = 0x20000000
     TRIGGER = 0x40000000
     RAW = 0x80000000
@@ -451,6 +488,9 @@ class AUX_IO_MODE(IntEnum):
     LOW_OUT = 2
     TRIGGER_OUT = 3
 
+
+AUXIO_MODE = AUX_IO_MODE
+
 __all__ = [
     "ACTION",
     "BANDWIDTH_CH",
@@ -468,16 +508,25 @@ __all__ = [
     "TIME_UNIT",
     "TRIGGER_DIR",
     "TRIGGER_STATE",
+    "PICO_TRIGGER_STATE",
     "THRESHOLD_MODE",
+    "PICO_THRESHOLD_MODE",
     "THRESHOLD_DIRECTION",
+    "PICO_THRESHOLD_DIRECTION",
     "CONDITIONS_INFO",
     "TRIGGER_CHANNEL_PROPERTIES",
+    "PICO_TRIGGER_CHANNEL_PROPERTIES",
     "CONDITION",
+    "PICO_CONDITION",
     "DIRECTION",
+    "PICO_DIRECTION",
+    "PICO_STREAMING_DATA_TRIGGER_INFO",
+    "TIMESTAMP_COUNTER_MASK",
     "PICO_TRIGGER_INFO",
     "UNIT_INFO",
     "WAVEFORM",
     "DIGITAL_PORT",
     "DIGITAL_PORT_HYSTERESIS",
     "AUX_IO_MODE",
+    "AUXIO_MODE",
 ]
