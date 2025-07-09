@@ -1138,6 +1138,40 @@ class PicoScopeBase:
         self.is_over_range()
         return total_samples.value
 
+    def get_values_async(
+        self,
+        start_index: int,
+        no_of_samples: int,
+        down_sample_ratio: int,
+        ratio_mode: int,
+        segment_index: int,
+        callback,
+        parameter,
+    ) -> None:
+        """Begin asynchronous retrieval of values from a single segment.
+
+        Args:
+            start_index: Start index in the data buffer.
+            no_of_samples: Number of samples to retrieve.
+            down_sample_ratio: Down-sampling ratio.
+            ratio_mode: Down-sampling mode.
+            segment_index: Memory segment index to read from.
+            callback: Driver callback invoked when the data is ready.
+            parameter: User-defined pointer passed to ``callback``.
+        """
+
+        self._call_attr_function(
+            "GetValuesAsync",
+            self.handle,
+            ctypes.c_uint64(start_index),
+            ctypes.c_uint64(no_of_samples),
+            ctypes.c_uint64(down_sample_ratio),
+            ratio_mode,
+            ctypes.c_uint64(segment_index),
+            callback,
+            parameter,
+        )
+
     
     def is_over_range(self) -> list:
         """
