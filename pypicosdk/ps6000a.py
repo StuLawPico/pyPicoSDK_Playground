@@ -1,5 +1,4 @@
 import ctypes
-from typing import Sequence
 
 from .constants import *
 from .base import PicoSDKException, PicoScopeBase
@@ -796,12 +795,12 @@ class ps6000a(PicoScopeBase):
         return channels_buffer, time_axis
 
     def get_streaming_latest_values(
-        self, streaming_data_info: Sequence[PICO_STREAMING_DATA_INFO]
+        self, streaming_data_info: list[PICO_STREAMING_DATA_INFO]
     ) -> tuple[list[PICO_STREAMING_DATA_INFO], PICO_STREAMING_DATA_TRIGGER_INFO]:
         """Retrieve the most recent streaming data from the device.
 
         Args:
-            streaming_data_info: Sequence of
+            streaming_data_info: list of
                 :class:`PICO_STREAMING_DATA_INFO` structures describing the
                 buffers to populate.
 
