@@ -79,8 +79,7 @@ scope._call_attr_function(
 
 # Begin the streaming capture.  The buffer size specified here mirrors the size
 # provided to ``SetDataBuffer`` above.  ``run_streaming`` returns the actual
-# sampling interval used by the device which we store in ``actual_interval`` for
-# accurate time axis generation.
+# sampling interval in microseconds which we store for diagnostic output.
 actual_interval = scope.run_streaming(
     sample_interval=SAMPLE_INTERVAL_US,
     time_units=psdk.PICO_TIME_UNIT.US,
@@ -90,22 +89,7 @@ actual_interval = scope.run_streaming(
     ratio=0,
     ratio_mode=psdk.RATIO_MODE.RAW,
 )
-# Choose appropriate time units for the x-axis based on the actual sampling
-# interval returned by the driver. The label updates automatically if the
-# interval changes.
-time_scale = 1.0
-x_unit_label = "\u03bcs"
-if actual_interval >= 1_000_000:
-    time_scale = 1e-6
-    x_unit_label = "s"
-elif actual_interval >= 1_000:
-    time_scale = 1e-3
-    x_unit_label = "ms"
-elif actual_interval < 1:
-    time_scale = 1e3
-    x_unit_label = "ns"
-
-# This example plots raw ADC counts without converting to physical units.
+# Plot raw ADC counts without converting to physical units.
 unit_label = "ADC"
 
 # ``deque`` containers automatically discard old samples once ``maxlen`` is
@@ -122,7 +106,7 @@ diagnostic_samples = []
 # be updated with each call to ``update``.
 fig, ax = plt.subplots()
 (line,) = ax.plot([], [], lw=1)
-ax.set_xlabel(f"Time ({x_unit_label})")
+ax.set_xlabel("Sample")
 ax.set_ylabel(f"Amplitude ({unit_label})")
 # Plot raw ADC counts so no range scaling is applied.
 ax.grid(True)  # show gridlines for easier viewing
@@ -193,9 +177,7 @@ def update(_):
     if scope_stopped:
         return (line,)
 
-    # Plotting raw ADC values so no scaling adjustments are needed.
-    # Ensure the x-axis label matches the selected time units.
-    ax.set_xlabel(f"Time ({x_unit_label})")
+    # Plot raw ADC values and use the sample index for the x-axis.
 
     # Request another block of samples. ``get_streaming_latest_values`` fills
     # ``stream_buffer`` starting at ``startIndex_`` and reports how many samples
@@ -225,32 +207,25 @@ def update(_):
         # Plot raw ADC counts without conversion.
         y_slice = adc_slice.astype(np.float64)
 
-        # Generate time values using the ongoing ``sample_index`` counter and
-        # the actual sampling interval reported by the driver.
-        times = (
-            np.arange(sample_index, sample_index + current.noOfSamples_)
-            * actual_interval
-            * time_scale
-        )
+        # Generate sample indices for the x-axis.
+        idx = np.arange(sample_index, sample_index + current.noOfSamples_)
         sample_index += current.noOfSamples_
 
-        # Record times and samples for diagnostic output.
-        diagnostic_times.extend(times.tolist())
+        # Record times and samples for diagnostic output (microseconds).
+        diagnostic_times.extend((idx * actual_interval).tolist())
         diagnostic_samples.extend(y_slice.tolist())
 
         # Append the new samples to the rolling deques.  Old samples are
         # automatically discarded once ``PLOT_POINTS`` is exceeded.
-        x_vals.extend(times)
+        x_vals.extend(idx)
         y_vals.extend(y_slice)
 
         # Update the plotted line with the latest window of data.
         line.set_data(x_vals, y_vals)
 
-        # Keep the x-axis focused on the newest samples.
-        start_time = max(0, times[-1] - PLOT_POINTS * actual_interval * time_scale)
-        # The x-axis shows only ``PLOT_POINTS`` worth of history for
-        # responsiveness; older data scrolls off the left.
-        ax.set_xlim(start_time, times[-1])
+        # Keep the x-axis focused on the most recent ``PLOT_POINTS`` samples.
+        start_idx = max(0, idx[-1] - PLOT_POINTS)
+        ax.set_xlim(start_idx, idx[-1])
 
         # Re-queue the buffer so the driver continues to fill it with data for
         # the next call.
@@ -267,12 +242,10 @@ def update(_):
         )
 
     if SHOW_INDICATORS:
-        end_time = sample_index * actual_interval * time_scale
-        buffer_time = max(
-            0, end_time - BUFFER_SIZE * actual_interval * time_scale
-        )
-        end_line.set_xdata([end_time, end_time])
-        buffer_line.set_xdata([buffer_time, buffer_time])
+        end_idx = sample_index
+        buffer_idx = max(0, end_idx - BUFFER_SIZE)
+        end_line.set_xdata([end_idx, end_idx])
+        buffer_line.set_xdata([buffer_idx, buffer_idx])
 
         return line, end_line, buffer_line
 
