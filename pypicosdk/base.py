@@ -123,7 +123,7 @@ class PicoScopeBase:
             # Streaming related status codes indicate no new data is ready.
             # These should not be treated as fatal errors and simply signal
             # the caller to try again later.
-            if status in [28672, 28673, 28674]:
+            if status in [37, 404, 28672, 28673, 28674]:
                 return
             self.close_unit()
             raise PicoSDKException(error_code)
