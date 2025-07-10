@@ -236,6 +236,7 @@ def update(_):
         )
         end_line.set_xdata([end_time, end_time])
         buffer_line.set_xdata([buffer_time, buffer_time])
+
         return line, end_line, buffer_line
 
     return (line,)
@@ -251,3 +252,4 @@ plt.show()
 if not scope_stopped:
     scope.stop()
 scope.close_unit()
+
