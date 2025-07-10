@@ -31,6 +31,10 @@ import pypicosdk as psdk
 SAMPLE_INTERVAL_US = 1
 BUFFER_SIZE = 4096
 PLOT_POINTS = 1000
+# ``VERIFY_BUFFER`` enables sanity checks that compare the number of samples
+# returned by the driver with the length of the slices taken from
+# ``stream_buffer``.  Leave disabled for normal operation.
+VERIFY_BUFFER = False
 
 # Instantiate the PicoScope driver wrapper and open a connection to the device.
 # All subsequent calls operate on this ``scope`` object.
@@ -162,12 +166,24 @@ def update(_):
     info.noOfSamples_ = BUFFER_SIZE
     data_info, _ = scope.get_streaming_latest_values([info])
     current = data_info[0]
+    if VERIFY_BUFFER:
+        print(
+            f"startIndex={current.startIndex_} samples={current.noOfSamples_}"
+        )
 
     if current.noOfSamples_:
-        # Slice out the region of ``stream_buffer`` that contains the new data.
         start = current.startIndex_
         end = start + current.noOfSamples_
-        adc_slice = stream_buffer[start:end]
+        if end <= BUFFER_SIZE:
+            adc_slice = stream_buffer[start:end]
+        else:
+            end_wrap = end - BUFFER_SIZE
+            adc_slice = np.concatenate((stream_buffer[start:], stream_buffer[:end_wrap]))
+        if VERIFY_BUFFER and len(adc_slice) != current.noOfSamples_:
+            print(
+                f"Warning: driver reported {current.noOfSamples_} samples "
+                f"but slice length is {len(adc_slice)}"
+            )
 
         # Convert raw ADC counts directly into the display units (V or mV).
         y_slice = adc_slice.astype(np.float64) * scale
