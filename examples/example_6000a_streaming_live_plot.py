@@ -234,8 +234,9 @@ def update(_):
         buffer_time = max(
             0, end_time - BUFFER_SIZE * actual_interval * time_scale
         )
-        end_line.set_xdata(end_time)
-        buffer_line.set_xdata(buffer_time)
+        end_line.set_xdata([end_time, end_time])
+        buffer_line.set_xdata([buffer_time, buffer_time])
+
         return line, end_line, buffer_line
 
     return (line,)
@@ -248,3 +249,7 @@ ani = FuncAnimation(fig, update, interval=20, cache_frame_data=False)
 plt.show()
 
 # Stop streaming and release the hardware when the plot closes.
+if not scope_stopped:
+    scope.stop()
+scope.close_unit()
+
