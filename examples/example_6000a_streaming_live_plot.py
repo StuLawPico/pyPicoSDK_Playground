@@ -2,14 +2,14 @@
 
 This script streams **raw ADC values** directly from the scope into a NumPy
 buffer and continuously updates a matplotlib plot.  The configuration values
-below show
-how the requested buffer size interacts with the number of points on screen and
-the sampling interval.  ``BUFFER_SIZE`` determines how many samples the driver
-can write in one transfer, ``PLOT_POINTS`` limits how many of those samples are
-displayed at once, and ``SAMPLE_INTERVAL_US`` controls the requested time step
-between samples.  Keeping ``BUFFER_SIZE`` reasonably large while limiting
-``PLOT_POINTS`` ensures new samples reach the plot quickly without building up
-excess history.
+below show how the requested buffer size interacts with the number of points on
+screen and the sampling interval.  ``BUFFER_SIZE`` determines how many samples
+the driver can write in one transfer, ``PLOT_POINTS`` limits how many of those
+samples are displayed at once, and ``SAMPLE_INTERVAL_US`` controls the
+requested time step between samples.  Keeping ``BUFFER_SIZE`` reasonably large
+while limiting ``PLOT_POINTS`` ensures new samples reach the plot quickly
+without building up excess history.  The y-axis automatically scales to the raw
+values plotted so the waveform stays readable regardless of amplitude.
 """
 
 import ctypes
@@ -110,7 +110,8 @@ fig, ax = plt.subplots()
 (line,) = ax.plot([], [], lw=1)
 ax.set_xlabel(f"Time ({x_unit_label})")
 ax.set_ylabel(f"Amplitude ({unit_label})")
-# Plot raw ADC counts so no range scaling is applied.
+# Plot raw ADC counts so no range scaling is applied.  The y-axis
+# will autoscale based on the data in ``update``.
 ax.grid(True)  # show gridlines for easier viewing
 
 sample_index = 0
@@ -176,6 +177,9 @@ def update(_):
 
         # Update the plotted line with the latest window of data.
         line.set_data(x_vals, y_vals)
+        # Recalculate limits so the y-axis fits the new data range.
+        ax.relim()
+        ax.autoscale_view(scalex=False)
 
         # Keep the x-axis focused on the newest samples.
         start_time = max(0, times[-1] - PLOT_POINTS * actual_interval * time_scale)
