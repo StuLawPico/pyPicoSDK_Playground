@@ -52,6 +52,9 @@ DIAGNOSTIC_INFO_FILE = "streaming_diagnostic_info.txt"
 scope = psdk.ps6000a()
 scope.open_unit()
 
+# Enable a 1 Hz, 1.8 V peak-to-peak sine wave on the built-in signal generator
+scope.set_siggen(frequency=1, pk2pk=1.8, wave_type=psdk.WAVEFORM.SINE)
+
 # Configure channel A for a 1 V range and enable a simple auto trigger so the
 # scope begins streaming immediately.
 scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1)
@@ -108,6 +111,7 @@ fig, ax = plt.subplots()
 (line,) = ax.plot([], [], lw=1)
 ax.set_xlabel("Sample")
 ax.set_ylabel(f"Amplitude ({unit_label})")
+ax.set_ylim(-32000, 32000)
 # Plot raw ADC counts so no range scaling is applied.
 ax.grid(True)  # show gridlines for easier viewing
 
@@ -223,9 +227,8 @@ def update(_):
         # Update the plotted line with the latest window of data.
         line.set_data(x_vals, y_vals)
 
-        # Keep the x-axis focused on the most recent ``PLOT_POINTS`` samples.
-        start_idx = max(0, idx[-1] - PLOT_POINTS)
-        ax.set_xlim(start_idx, idx[-1])
+        # Keep the x-axis focused on the latest ``PLOT_POINTS`` samples.
+        ax.set_xlim(x_vals[0], x_vals[-1])
 
         # Re-queue the buffer so the driver continues to fill it with data for
         # the next call.
