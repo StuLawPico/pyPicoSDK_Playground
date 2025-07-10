@@ -1,7 +1,8 @@
 """Live streaming plot example for a PicoScope 6000A.
 
-This script streams data directly from the scope into a NumPy buffer and
-continuously updates a matplotlib plot.  The configuration values below show
+This script streams **raw ADC values** directly from the scope into a NumPy
+buffer and continuously updates a matplotlib plot.  The configuration values
+below show
 how the requested buffer size interacts with the number of points on screen and
 the sampling interval.  ``BUFFER_SIZE`` determines how many samples the driver
 can write in one transfer, ``PLOT_POINTS`` limits how many of those samples are
@@ -94,24 +95,8 @@ elif actual_interval < 1:
     time_scale = 1e3
     x_unit_label = "ns"
 
-# Determine the channel's dynamic range in millivolts so we can scale samples
-# to physical units and constrain the y-axis accordingly.  ``scope.range``
-# stores the driver enum used during ``set_channel``.
-current_range = scope.range[psdk.CHANNEL.A]
-range_mv = (
-    psdk.RANGE_LIST[current_range] * scope.probe_scale.get(psdk.CHANNEL.A, 1)
-)
-
-# Choose display units based on the selected range.  Ranges of 1 V and above are
-# shown in volts, otherwise millivolts.
-unit_scale = 1.0
-unit_label = "mV"
-if range_mv >= 1000:
-    unit_scale = 0.001
-    unit_label = "V"
-
-# ``scale`` converts raw ADC counts directly to the chosen display units.
-scale = range_mv / scope.max_adc_value * unit_scale
+# This example plots raw ADC counts without converting to physical units.
+unit_label = "ADC"
 
 # ``deque`` containers automatically discard old samples once ``maxlen`` is
 # reached.  This gives us a constantly moving window of ``PLOT_POINTS`` samples
@@ -125,7 +110,7 @@ fig, ax = plt.subplots()
 (line,) = ax.plot([], [], lw=1)
 ax.set_xlabel(f"Time ({x_unit_label})")
 ax.set_ylabel(f"Amplitude ({unit_label})")
-ax.set_ylim(-range_mv * unit_scale, range_mv * unit_scale)
+# Plot raw ADC counts so no range scaling is applied.
 ax.grid(True)  # show gridlines for easier viewing
 
 sample_index = 0
@@ -138,25 +123,12 @@ info.mode_ = psdk.RATIO_MODE.RAW
 info.type_ = psdk.DATA_TYPE.INT16_T
 info.noOfSamples_ = BUFFER_SIZE
 
+
 def update(_):
     """Fetch new samples from the driver and extend the plot."""
-    global sample_index, current_range, range_mv, unit_scale, unit_label, scale
+    global sample_index
 
-    # Refresh scaling if the channel range has been changed on the device.
-    if scope.range[psdk.CHANNEL.A] != current_range:
-        current_range = scope.range[psdk.CHANNEL.A]
-        range_mv = (
-            psdk.RANGE_LIST[current_range]
-            * scope.probe_scale.get(psdk.CHANNEL.A, 1)
-        )
-        unit_scale = 1.0
-        unit_label = "mV"
-        if range_mv >= 1000:
-            unit_scale = 0.001
-            unit_label = "V"
-        scale = range_mv / scope.max_adc_value * unit_scale
-        ax.set_ylabel(f"Amplitude ({unit_label})")
-        ax.set_ylim(-range_mv * unit_scale, range_mv * unit_scale)
+    # Plotting raw ADC values so no scaling adjustments are needed.
     # Ensure the x-axis label matches the selected time units.
     ax.set_xlabel(f"Time ({x_unit_label})")
 
@@ -167,9 +139,7 @@ def update(_):
     data_info, _ = scope.get_streaming_latest_values([info])
     current = data_info[0]
     if VERIFY_BUFFER:
-        print(
-            f"startIndex={current.startIndex_} samples={current.noOfSamples_}"
-        )
+        print(f"startIndex={current.startIndex_} samples={current.noOfSamples_}")
 
     if current.noOfSamples_:
         start = current.startIndex_
@@ -178,15 +148,17 @@ def update(_):
             adc_slice = stream_buffer[start:end]
         else:
             end_wrap = end - BUFFER_SIZE
-            adc_slice = np.concatenate((stream_buffer[start:], stream_buffer[:end_wrap]))
+            adc_slice = np.concatenate(
+                (stream_buffer[start:], stream_buffer[:end_wrap])
+            )
         if VERIFY_BUFFER and len(adc_slice) != current.noOfSamples_:
             print(
                 f"Warning: driver reported {current.noOfSamples_} samples "
                 f"but slice length is {len(adc_slice)}"
             )
 
-        # Convert raw ADC counts directly into the display units (V or mV).
-        y_slice = adc_slice.astype(np.float64) * scale
+        # Plot raw ADC counts without conversion.
+        y_slice = adc_slice.astype(np.float64)
 
         # Generate time values using the ongoing ``sample_index`` counter and
         # the actual sampling interval reported by the driver.
@@ -211,8 +183,6 @@ def update(_):
         # responsiveness; older data scrolls off the left.
         ax.set_xlim(start_time, times[-1])
 
-
-
         # Re-queue the buffer so the driver continues to fill it with data for
         # the next call.
         scope._call_attr_function(
@@ -227,7 +197,8 @@ def update(_):
             psdk.ACTION.ADD,
         )
 
-    return line,
+    return (line,)
+
 
 ani = FuncAnimation(fig, update, interval=20, cache_frame_data=False)
 plt.show()
