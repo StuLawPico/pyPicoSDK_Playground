@@ -36,6 +36,11 @@ PLOT_POINTS = 1000
 # returned by the driver with the length of the slices taken from
 # ``stream_buffer``.  Leave disabled for normal operation.
 VERIFY_BUFFER = False
+# Key ``STOP_KEY`` stops the scope but leaves the plot running when pressed.
+STOP_KEY = "s"
+# ``SHOW_INDICATORS`` toggles vertical markers for the latest sample and the
+# end of the circular buffer.
+SHOW_INDICATORS = True
 
 # Instantiate the PicoScope driver wrapper and open a connection to the device.
 # All subsequent calls operate on this ``scope`` object.
@@ -113,6 +118,14 @@ ax.set_ylabel(f"Amplitude ({unit_label})")
 # Plot raw ADC counts so no range scaling is applied.
 ax.grid(True)  # show gridlines for easier viewing
 
+if SHOW_INDICATORS:
+    end_line = ax.axvline(0, color="tab:red", ls="--", lw=0.8)
+    buffer_line = ax.axvline(0, color="tab:blue", ls=":", lw=0.8)
+else:
+    end_line = buffer_line = None
+
+scope_stopped = False
+
 sample_index = 0
 # Structure describing the buffer we want ``get_streaming_latest_values`` to
 # fill.  ``noOfSamples_`` is updated before each call to request an entire
@@ -124,9 +137,28 @@ info.type_ = psdk.DATA_TYPE.INT16_T
 info.noOfSamples_ = BUFFER_SIZE
 
 
+def on_key(event):
+    """Stop streaming when ``STOP_KEY`` is pressed."""
+    global scope_stopped
+    if event.key == STOP_KEY and not scope_stopped:
+        scope.stop()
+        scope_stopped = True
+        print("Streaming stopped")
+
+
+def on_close(_):
+    """Ensure the scope is closed when the plot window exits."""
+    if not scope_stopped:
+        scope.stop()
+    scope.close_unit()
+
+
 def update(_):
     """Fetch new samples from the driver and extend the plot."""
     global sample_index
+
+    if scope_stopped:
+        return (line,)
 
     # Plotting raw ADC values so no scaling adjustments are needed.
     # Ensure the x-axis label matches the selected time units.
@@ -197,12 +229,22 @@ def update(_):
             psdk.ACTION.ADD,
         )
 
+    if SHOW_INDICATORS:
+        end_time = sample_index * actual_interval * time_scale
+        buffer_time = max(
+            0, end_time - BUFFER_SIZE * actual_interval * time_scale
+        )
+        end_line.set_xdata(end_time)
+        buffer_line.set_xdata(buffer_time)
+        return line, end_line, buffer_line
+
     return (line,)
 
+
+fig.canvas.mpl_connect("key_press_event", on_key)
+fig.canvas.mpl_connect("close_event", on_close)
 
 ani = FuncAnimation(fig, update, interval=20, cache_frame_data=False)
 plt.show()
 
-# Stop streaming and release the hardware once the plot window is closed.
-scope.stop()
-scope.close_unit()
+# Stop streaming and release the hardware when the plot closes.
