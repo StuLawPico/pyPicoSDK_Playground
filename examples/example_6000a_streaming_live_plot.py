@@ -14,6 +14,7 @@ excess history.
 
 import ctypes
 from collections import deque
+import sys
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -41,6 +42,10 @@ STOP_KEY = "s"
 # ``SHOW_INDICATORS`` toggles vertical markers for the latest sample and the
 # end of the circular buffer.
 SHOW_INDICATORS = True
+
+# Diagnostic output filenames for captured samples and metadata.
+DIAGNOSTIC_OUTPUT_FILE = "streaming_diagnostic.npz"
+DIAGNOSTIC_INFO_FILE = "streaming_diagnostic_info.txt"
 
 # Instantiate the PicoScope driver wrapper and open a connection to the device.
 # All subsequent calls operate on this ``scope`` object.
@@ -109,6 +114,10 @@ unit_label = "ADC"
 x_vals = deque(maxlen=PLOT_POINTS)
 y_vals = deque(maxlen=PLOT_POINTS)
 
+# Lists accumulate the full set of samples for diagnostic output.
+diagnostic_times = []
+diagnostic_samples = []
+
 # Set up the matplotlib figure. ``line`` represents the waveform trace and will
 # be updated with each call to ``update``.
 fig, ax = plt.subplots()
@@ -125,6 +134,29 @@ else:
     end_line = buffer_line = None
 
 scope_stopped = False
+
+
+def save_diagnostic() -> None:
+    """Write captured samples and metadata to disk."""
+    np.savez(
+        DIAGNOSTIC_OUTPUT_FILE,
+        times=np.array(diagnostic_times, dtype=np.float64),
+        samples=np.array(diagnostic_samples, dtype=np.float64),
+    )
+    with open(DIAGNOSTIC_INFO_FILE, "w", encoding="utf-8") as info:
+        info.write(
+            "Diagnostic information for example_6000a_streaming_live_plot.py\n"
+        )
+        info.write(f"SAMPLE_INTERVAL_US = {SAMPLE_INTERVAL_US}\n")
+        info.write(f"BUFFER_SIZE = {BUFFER_SIZE}\n")
+        info.write(f"PLOT_POINTS = {PLOT_POINTS}\n")
+        info.write(f"Actual interval (us) = {actual_interval}\n")
+        info.write(f"pypicosdk version = {psdk.version.VERSION}\n")
+        info.write(f"Python version = {sys.version.replace('\n', ' ')}\n")
+        info.write(
+            "The accompanying NPZ file contains arrays 'times' and 'samples'\n"
+        )
+
 
 sample_index = 0
 # Structure describing the buffer we want ``get_streaming_latest_values`` to
@@ -151,6 +183,7 @@ def on_close(_):
     if not scope_stopped:
         scope.stop()
     scope.close_unit()
+    save_diagnostic()
 
 
 def update(_):
@@ -200,6 +233,10 @@ def update(_):
             * time_scale
         )
         sample_index += current.noOfSamples_
+
+        # Record times and samples for diagnostic output.
+        diagnostic_times.extend(times.tolist())
+        diagnostic_samples.extend(y_slice.tolist())
 
         # Append the new samples to the rolling deques.  Old samples are
         # automatically discarded once ``PLOT_POINTS`` is exceeded.
@@ -252,4 +289,5 @@ plt.show()
 if not scope_stopped:
     scope.stop()
 scope.close_unit()
+save_diagnostic()
 
