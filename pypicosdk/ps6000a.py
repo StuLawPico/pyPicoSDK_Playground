@@ -190,7 +190,7 @@ class ps6000a(PicoScopeBase):
         )
         self.resolution = RESOLUTION(resolution.value)
         self.min_adc_value, self.max_adc_value = super()._get_adc_limits()
-        return RESOLUTION(resolution.value)
+        return self.resolution
 
     def get_maximum_available_memory(self, resolution: RESOLUTION) -> int:
         """Return maximum sample memory for ``resolution``.

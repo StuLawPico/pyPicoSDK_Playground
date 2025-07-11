@@ -35,7 +35,7 @@ class UNIT_INFO:
     PICO_FIRMWARE_VERSION_1 = 9
     PICO_FIRMWARE_VERSION_2 = 10
 
-class RESOLUTION:
+class RESOLUTION(IntEnum):
     """
     Resolution constants for PicoScope devices.
 
