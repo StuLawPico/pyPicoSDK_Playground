@@ -356,7 +356,22 @@ class DIGITAL_PORT_HYSTERESIS(IntEnum):
 
 
 class PICO_CHANNEL_FLAGS(IntEnum):
-    """Bit flags for enabled channels used by ``ps6000aChannelCombinationsStateless``."""
+    """Channel enable flags returned by :meth:`ps6000a.channel_combinations_stateless`.
+
+    Attributes:
+        CHANNEL_A_FLAGS: Channel A is enabled.
+        CHANNEL_B_FLAGS: Channel B is enabled.
+        CHANNEL_C_FLAGS: Channel C is enabled.
+        CHANNEL_D_FLAGS: Channel D is enabled.
+        CHANNEL_E_FLAGS: Channel E is enabled.
+        CHANNEL_F_FLAGS: Channel F is enabled.
+        CHANNEL_G_FLAGS: Channel G is enabled.
+        CHANNEL_H_FLAGS: Channel H is enabled.
+        PORT0_FLAGS: Digital port 0 is enabled.
+        PORT1_FLAGS: Digital port 1 is enabled.
+        PORT2_FLAGS: Digital port 2 is enabled.
+        PORT3_FLAGS: Digital port 3 is enabled.
+    """
 
     CHANNEL_A_FLAGS = 1
     CHANNEL_B_FLAGS = 2
@@ -374,7 +389,25 @@ class PICO_CHANNEL_FLAGS(IntEnum):
 
 
 class PICO_CONNECT_PROBE_RANGE(IntEnum):
-    """Input range identifiers for ``get_analogue_offset_limits``."""
+    """Input range identifiers for :meth:`ps6000a.get_analogue_offset_limits`.
+
+    Attributes:
+        CONNECT_PROBE_OFF: No probe connected.
+        D9_BNC_10MV: ±10 mV range.
+        D9_BNC_20MV: ±20 mV range.
+        D9_BNC_50MV: ±50 mV range.
+        D9_BNC_100MV: ±100 mV range.
+        D9_BNC_200MV: ±200 mV range.
+        D9_BNC_500MV: ±500 mV range.
+        D9_BNC_1V: ±1 V range.
+        D9_BNC_2V: ±2 V range.
+        D9_BNC_5V: ±5 V range.
+        D9_BNC_10V: ±10 V range.
+        D9_BNC_20V: ±20 V range.
+        D9_BNC_50V: ±50 V range.
+        D9_BNC_100V: ±100 V range.
+        D9_BNC_200V: ±200 V range.
+    """
 
     CONNECT_PROBE_OFF = 1024
 

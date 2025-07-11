@@ -378,7 +378,15 @@ class ps6000a(PicoScopeBase):
     def channel_combinations_stateless(
         self, resolution: RESOLUTION, timebase: int
     ) -> list[PICO_CHANNEL_FLAGS]:
-        """Return valid channel flag combinations for a configuration."""
+        """Return valid channel flag combinations for a configuration.
+
+        Args:
+            resolution: Proposed resolution for the device.
+            timebase: Proposed timebase number.
+
+        Returns:
+            list[PICO_CHANNEL_FLAGS]: Allowed combinations of enabled channels.
+        """
 
         size = 8
         func = self._get_attr_function("ChannelCombinationsStateless")
