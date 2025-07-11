@@ -109,14 +109,7 @@ class ps6000a(PicoScopeBase):
 
         Returns:
             list[int]: Sequence of bit masks using :class:`PICO_CHANNEL_FLAGS`.
-
-        Raises:
-            PicoSDKException: If the device has not been opened.
-        """
-
-        if self.resolution is None:
-            raise PicoSDKException("Device has not been initialized, use open_unit()")
-
+            
         n_combos = ctypes.c_uint32()
         # First call obtains the required array size
         self._call_attr_function(
@@ -139,10 +132,35 @@ class ps6000a(PicoScopeBase):
         )
 
         return list(combo_array)
-    
+
+    def get_maximum_available_memory(self) -> int:
+        """Return the maximum sample depth for the current resolution.
+
+        Wraps ``ps6000aGetMaximumAvailableMemory`` to query how many samples
+        can be captured at ``self.resolution``.
+
+        Returns:
+            int: Maximum number of samples supported.
+
+        Raises:
+            PicoSDKException: If the device has not been opened.
+        """
+
+        if self.resolution is None:
+            raise PicoSDKException("Device has not been initialized, use open_unit()")
+            
+        max_samples = ctypes.c_uint64()
+        self._call_attr_function(
+            "GetMaximumAvailableMemory",
+            self.handle,
+            ctypes.byref(max_samples),
+            self.resolution,
+        )
+        return max_samples.value
+
     def get_timebase(self, timebase:int, samples:int, segment:int=0) -> None:
         """
-        This function calculates the sampling rate and maximum number of 
+        This function calculates the sampling rate and maximum number of
         samples for a given timebase under the specified conditions.
 
         Args:
