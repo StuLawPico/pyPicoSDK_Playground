@@ -98,6 +98,41 @@ class ps6000a(PicoScopeBase):
         )
         return max_segments.value
 
+    def get_channel_combinations(self, timebase: int) -> list[int]:
+        """Return valid channel flag combinations for a proposed timebase.
+
+        This wraps ``ps6000aChannelCombinationsStateless`` and requires the
+        device to be opened first.
+
+        Args:
+            timebase: Proposed timebase value to test.
+
+        Returns:
+            list[int]: Sequence of bit masks using :class:`PICO_CHANNEL_FLAGS`.
+            
+        n_combos = ctypes.c_uint32()
+        # First call obtains the required array size
+        self._call_attr_function(
+            "ChannelCombinationsStateless",
+            self.handle,
+            None,
+            ctypes.byref(n_combos),
+            self.resolution,
+            ctypes.c_uint32(timebase),
+        )
+
+        combo_array = (ctypes.c_uint32 * n_combos.value)()
+        self._call_attr_function(
+            "ChannelCombinationsStateless",
+            self.handle,
+            combo_array,
+            ctypes.byref(n_combos),
+            self.resolution,
+            ctypes.c_uint32(timebase),
+        )
+
+        return list(combo_array)
+
     def get_maximum_available_memory(self) -> int:
         """Return the maximum sample depth for the current resolution.
 
@@ -113,7 +148,7 @@ class ps6000a(PicoScopeBase):
 
         if self.resolution is None:
             raise PicoSDKException("Device has not been initialized, use open_unit()")
-
+            
         max_samples = ctypes.c_uint64()
         self._call_attr_function(
             "GetMaximumAvailableMemory",
