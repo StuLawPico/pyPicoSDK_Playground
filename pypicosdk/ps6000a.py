@@ -277,6 +277,17 @@ class ps6000a(PicoScopeBase):
         )
         return count.value
 
+    def get_no_of_processed_captures(self) -> int:
+        """Return the number of captures processed in rapid block mode."""
+
+        n_processed = ctypes.c_uint64()
+        self._call_attr_function(
+            "GetNoOfProcessedCaptures",
+            self.handle,
+            ctypes.byref(n_processed),
+        )
+        return n_processed.value
+
     def report_all_channels_overvoltage_trip_status(
         self,
     ) -> list[PICO_CHANNEL_OVERVOLTAGE_TRIPPED]:
