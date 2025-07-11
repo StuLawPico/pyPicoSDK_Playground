@@ -355,6 +355,22 @@ class DIGITAL_PORT_HYSTERESIS(IntEnum):
     LOW_50MV = 3
 
 
+class PICO_CHANNEL_OVERVOLTAGE_TRIPPED(ctypes.Structure):
+    """Status flag indicating an overvoltage trip on a channel.
+
+    Attributes:
+        channel_: Channel identifier as a :class:`CHANNEL` value.
+        tripped_: ``1`` if an overvoltage trip occurred, otherwise ``0``.
+    """
+
+    _pack_ = 1
+
+    _fields_ = [
+        ("channel_", ctypes.c_int32),
+        ("tripped_", ctypes.c_uint8),
+    ]
+
+
 class PICO_CHANNEL_FLAGS(IntEnum):
     """Bit flags for enabled channels used by ``ps6000aChannelCombinationsStateless``."""
 
@@ -626,6 +642,7 @@ __all__ = [
     'PICO_FIRMWARE_INFO',
     'DIGITAL_PORT',
     'DIGITAL_PORT_HYSTERESIS',
+    'PICO_CHANNEL_OVERVOLTAGE_TRIPPED',
     'PICO_CHANNEL_FLAGS',
     'PICO_CONNECT_PROBE_RANGE',
     'AUXIO_MODE',
