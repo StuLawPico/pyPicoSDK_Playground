@@ -123,6 +123,37 @@ class ps6000a(PicoScopeBase):
         )
         return max_samples.value
 
+    def get_analogue_offset_limits(
+        self,
+        range: RANGE,
+        coupling: COUPLING,
+    ) -> dict:
+        """Return allowable analogue offset range for the given settings.
+
+        This wraps ``ps6000aGetAnalogueOffsetLimits`` to query the maximum
+        and minimum analogue offset voltages permitted when a channel is
+        configured with ``range`` and ``coupling``.
+
+        Args:
+            range: Input voltage range as a :class:`RANGE` value.
+            coupling: Channel coupling mode from :class:`COUPLING`.
+
+        Returns:
+            dict: ``{"maximum_voltage": float, "minimum_voltage": float}``.
+        """
+
+        maximum = ctypes.c_double()
+        minimum = ctypes.c_double()
+        self._call_attr_function(
+            "GetAnalogueOffsetLimits",
+            self.handle,
+            range,
+            coupling,
+            ctypes.byref(maximum),
+            ctypes.byref(minimum),
+        )
+        return {"maximum_voltage": maximum.value, "minimum_voltage": minimum.value}
+
     def get_timebase(self, timebase:int, samples:int, segment:int=0) -> None:
         """
         This function calculates the sampling rate and maximum number of
