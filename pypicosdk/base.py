@@ -806,13 +806,17 @@ class PicoScopeBase:
         return channels_buffer
     
     def buffer_ctypes_to_list(self, ctypes_list):
-        "Converts a ctype dataset into a python list of samples"
-        return [sample for sample in ctypes_list]
+        """Convert a ctypes array to a NumPy array of samples."""
+
+        return np.ctypeslib.as_array(ctypes_list)
     
     def channels_buffer_ctype_to_list(self, channels_buffer):
-        "Takes a ctypes channel dictionary buffer and converts into a integer array."
+        """Convert a dictionary of ctypes buffers to NumPy arrays."""
+
         for channel in channels_buffer:
-            channels_buffer[channel] = self.buffer_ctypes_to_list(channels_buffer[channel])
+            channels_buffer[channel] = self.buffer_ctypes_to_list(
+                channels_buffer[channel]
+            )
         return channels_buffer
 
     # Set methods for PicoScope configuration    
