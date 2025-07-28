@@ -764,9 +764,17 @@ class PicoScopeBase:
         down_sample_ratio_mode: int,
         from_segment_index: int,
         to_segment_index: int,
-        overflow: ctypes.c_int16,
     ) -> int:
-        """Retrieve overlapped data from multiple segments.
+        """Queue an overlapped data request for block or rapid block mode.
+
+        Call this method **before** :meth:`run_block_capture` to defer the data
+        retrieval request. The driver validates and performs the request when
+        :meth:`run_block_capture` runs, which avoids the extra communication that
+        occurs when calling :meth:`run_block_capture` followed by
+        :meth:`get_values`. After the capture completes you can call
+        :meth:`get_values` again to retrieve additional copies of the data.
+        Stop further captures with :meth:`stop_using_get_values_overlapped` and
+        check progress using :meth:`ps6000a.PicoScope.get_no_of_processed_captures`.
 
         Args:
             start_index: Index within the circular buffer to begin reading from.
@@ -775,8 +783,25 @@ class PicoScopeBase:
             down_sample_ratio_mode: Downsampling mode from :class:`RATIO_MODE`.
             from_segment_index: First segment index to read.
             to_segment_index: Last segment index to read.
-            overflow: ``ctypes.c_int16`` instance that receives any overflow
-                flags.
+
+        Examples:
+            >>> samples = scope.get_values_overlapped(
+            ...     start_index=0,              # read from start of buffer
+            ...     no_of_samples=1024,         # copy 1024 samples
+            ...     down_sample_ratio=1,        # no downsampling
+            ...     down_sample_ratio_mode=RATIO_MODE.RAW,
+            ...     from_segment_index=0,       # first segment only
+            ...     to_segment_index=0,
+            ... )
+            >>> scope.run_block_capture(timebase=1, samples=1024)
+            >>> data = scope.get_values(samples=1024)
+            >>> samples, scope.over_range
+            (1024, 0)
+
+        In this example the request captures 1024 samples from segment ``0`` with
+        no downsampling. ``samples`` reports the number of samples returned and
+        ``scope.over_range`` holds a bit mask of channels that exceeded their
+        range.
 
         Returns:
             int: Actual number of samples copied from each segment.
@@ -784,6 +809,7 @@ class PicoScopeBase:
 
         self.is_ready()
         c_samples = ctypes.c_uint64(no_of_samples)
+        overflow = ctypes.c_int16()
         self._call_attr_function(
             "GetValuesOverlapped",
             self.handle,
@@ -1355,8 +1381,13 @@ class PicoScopeBase:
 
     
     def is_over_range(self) -> list:
-        """
-        Logs and prints a warning if any channel has been over range.
+        """Check for channels that exceeded their input range.
+
+        The :attr:`over_range` attribute stores a bit mask updated by data
+        retrieval methods like :meth:`get_values` and
+        :meth:`get_values_overlapped`. Calling this method logs a warning if
+        any channel went over range and returns a list of the affected
+        channel names.
 
         Returns:
             list: List of channels that have been over range
