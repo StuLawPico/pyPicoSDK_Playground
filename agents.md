@@ -4,6 +4,7 @@
 ## Goals for AI agents, models and tools
 - This project aims to wrap the ps6000a API in a modern pythonic manner. It should be customer focused and always aim to help customers use their Pico harware to measure or solve real world applications.
 - The ongoing mission is to allow access to the power and speed of the Pico C / dll based API for engineers that are using higher level languages such as python (which is the only language in the scope of this project).
+- Wehn adding more measuement examples, keep to the format and convention used amplitude measurement example 
 
 ## Project Structure
 - **pypicosdk/**: Source package containing library modules like `base.py`, `ps6000a.py`, `constants.py`, and `pypicosdk.py`.
