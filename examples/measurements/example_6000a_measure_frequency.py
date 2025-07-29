@@ -17,16 +17,17 @@ def zero_crossings(data: np.ndarray) -> np.ndarray:
     """Return indices of zero crossings in ``data``."""
 
     centered = data - data.mean()
-    return np.where(np.diff(np.signbit(centered)))[0]
+    return np.where(np.diff(np.sign(centered)))[0]
 
 
 def measure_frequency(data: np.ndarray, sample_rate: float) -> float:
     """Return the average frequency of ``data`` in Hz."""
 
     crossings = zero_crossings(data)
-    if len(crossings) < 2:
+    if len(crossings) < 3:
         return float("nan")
-    periods = np.diff(crossings) / sample_rate
+    # Use every other crossing to avoid measuring half periods
+    periods = (crossings[2:] - crossings[:-2]) / sample_rate
     return float(1 / periods.mean())
 
 
@@ -49,10 +50,13 @@ channels_buffer, time_axis = scope.run_simple_block_capture(TIMEBASE, SAMPLES)
 # Close connection to PicoScope
 scope.close_unit()
 
-# Extract waveform and measure frequency
+# Extract waveform and measure frequency using the actual sample rate
 waveform = channels_buffer[CHANNEL]
 
-freq_value = measure_frequency(waveform, SAMPLE_RATE * 1e6)
+# Calculate sample rate from returned time axis (ns)
+actual_sample_rate = 1e9 / (time_axis[1] - time_axis[0])
+
+freq_value = measure_frequency(waveform, actual_sample_rate)
 
 print(f"Measured frequency: {freq_value/1e6:.2f} MHz")
 
