@@ -1,4 +1,4 @@
-"""Pulse width trigger example.
+"""Pulse width trigger example using advanced trigger mode.
 
 This script demonstrates configuring a pulse width qualifier to
 trigger when a high pulse on Channel A exceeds a user-defined width.
@@ -22,10 +22,16 @@ scope.open_unit()
 # Generate a square wave and loopback to Channel A
 scope.set_siggen(frequency=1_000, pk2pk=2.0, wave_type=psdk.WAVEFORM.SQUARE)
 
-# Enable Channel A and simple trigger
+# Enable Channel A and configure an advanced trigger
 scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V2)
-scope.set_simple_trigger(channel=psdk.CHANNEL.A, threshold_mv=0,
-                         direction=psdk.TRIGGER_DIR.FALLING)
+scope.set_advanced_trigger(
+    channel=psdk.CHANNEL.A,
+    state=psdk.PICO_TRIGGER_STATE.TRUE,
+    direction=psdk.PICO_THRESHOLD_DIRECTION.PICO_FALLING,
+    threshold_mode=psdk.PICO_THRESHOLD_MODE.PICO_LEVEL,
+    threshold_upper_mv=0,
+    threshold_lower_mv=0,
+)
 
 # Convert desired sample rate to timebase
 TIMEBASE = scope.sample_rate_to_timebase(SAMPLE_RATE, psdk.SAMPLE_RATE.MSPS)
