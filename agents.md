@@ -22,6 +22,8 @@
 - Include type hints for function arguments and return types.
 - Write Google‑style docstrings (`Args:`, `Returns:` etc.).
 - Constants are defined with `IntEnum` classes in `constants.py`.
+- When creating translation functions, make sure the user doesn't have to input ctypes.
+- When possible, in translation functions, use default values to support users that do not wish to type all args in their script. These must be noted in the docs.
 
 ## Testing
 - Use `pytest` for running tests. Execute `pytest -q` from the project root to run the suite.
