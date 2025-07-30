@@ -958,26 +958,44 @@ class PicoScopeBase:
 
     def set_trigger_channel_conditions(
         self,
-        source: int,
-        state: int,
+        conditions: list[tuple[int, int]] | tuple[int, int],
         action: int = ACTION.CLEAR_ALL | ACTION.ADD,
     ) -> None:
-        """Configure a trigger condition.
+        """Configure trigger channel conditions.
 
         Args:
-            source (int): Input source as a :class:`CHANNEL` value.
-            state (int): Desired state from :class:`PICO_TRIGGER_STATE`.
-            action (int, optional): How to apply this condition relative to any
+            conditions: Either a single condition as (source, state) tuple, or a list
+                of (source, state) tuples for multiple conditions. Each condition
+                will be ANDed together. Multiple calls to this function will OR
+                the condition sets together.
+            action (int, optional): How to apply these conditions relative to any
                 previous configuration. Defaults to ``ACTION.CLEAR_ALL | ACTION.ADD``.
+                
+        Examples:
+            # Single condition
+            scope.set_trigger_channel_conditions((CHANNEL.A, PICO_TRIGGER_STATE.TRUE))
+            
+            # Multiple conditions (ANDed together)
+            scope.set_trigger_channel_conditions([
+                (CHANNEL.A, PICO_TRIGGER_STATE.TRUE),
+                (CHANNEL.B, PICO_TRIGGER_STATE.FALSE)
+            ])
         """
-
-        cond = PICO_CONDITION(source, state)
+        
+        # Handle single condition case
+        if isinstance(conditions, tuple):
+            conditions = [conditions]
+        
+        # Create array of PICO_CONDITION structures
+        cond_array = (PICO_CONDITION * len(conditions))()
+        for i, (source, state) in enumerate(conditions):
+            cond_array[i] = PICO_CONDITION(source, state)
 
         self._call_attr_function(
             "SetTriggerChannelConditions",
             self.handle,
-            ctypes.byref(cond),
-            ctypes.c_int16(1),
+            ctypes.byref(cond_array),
+            ctypes.c_int16(len(conditions)),
             action,
         )
 
@@ -1183,25 +1201,44 @@ class PicoScopeBase:
 
     def set_pulse_width_qualifier_conditions(
         self,
-        source: int,
-        state: int,
+        conditions: list[tuple[int, int]] | tuple[int, int],
         action: int = ACTION.CLEAR_ALL | ACTION.ADD,
     ) -> None:
         """Configure pulse width qualifier conditions.
+
         Args:
-            source: Trigger source channel.
-            state: Trigger state condition.
+            conditions: Either a single condition as (source, state) tuple, or a list
+                of (source, state) tuples for multiple conditions. Each condition
+                will be ANDed together. Multiple calls to this function will OR
+                the condition sets together.
             action: Combination of :class:`ACTION` flags controlling how the
                 condition is applied.
+                
+        Examples:
+            # Single condition
+            scope.set_pulse_width_qualifier_conditions((CHANNEL.A, PICO_TRIGGER_STATE.TRUE))
+            
+            # Multiple conditions (ANDed together)
+            scope.set_pulse_width_qualifier_conditions([
+                (CHANNEL.A, PICO_TRIGGER_STATE.TRUE),
+                (CHANNEL.B, PICO_TRIGGER_STATE.FALSE)
+            ])
         """
-
-        cond = PICO_CONDITION(source, state)
+        
+        # Handle single condition case
+        if isinstance(conditions, tuple):
+            conditions = [conditions]
+        
+        # Create array of PICO_CONDITION structures
+        cond_array = (PICO_CONDITION * len(conditions))()
+        for i, (source, state) in enumerate(conditions):
+            cond_array[i] = PICO_CONDITION(source, state)
 
         self._call_attr_function(
             "SetPulseWidthQualifierConditions",
             self.handle,
-            ctypes.byref(cond),
-            ctypes.c_int16(1),
+            ctypes.byref(cond_array),
+            ctypes.c_int16(len(conditions)),
             action,
         )
 
