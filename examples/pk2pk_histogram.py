@@ -8,17 +8,15 @@ Description:
 Requirements:
 - PicoScope 6000E
 - Python packages:
-  pip install matplotlib scipy numpy pypicosdk
+  (pip install) matplotlib scipy numpy pypicosdk
 
 Setup:
-  - Connect 6000E (preferebly with FlexRes) SigGen (AWG) to
+  - Connect 6000E (preferably with FlexRes) SigGen (AWG) to
     Channel A of the oscilloscope using a BNC cable or probe
 """
 import matplotlib.pyplot as plt
 import numpy as np
 import pypicosdk as psdk
-
-# Pico examples use inline argument values for clarity
 
 # Scope setup
 scope = psdk.ps6000a()

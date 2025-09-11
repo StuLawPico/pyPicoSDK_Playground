@@ -1,6 +1,17 @@
-"""Simple amplitude measurement using a block capture.
-Uses histogram-based top and base functions to provide a robust amplitude
-measurement. The script can also calculate RMS amplitude.
+"""
+Amplitude measurement example for a PicoScope 6000E device
+
+Description:
+  Uses histogram-based top and base functions to provide a robust
+  amplitude measurement and demonstrates calculating RMS amplitude.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib pypicosdk
+
+Setup:
+  - Connect Channel A to the AWG output
 """
 
 from measurements import amplitude, pk2pk, rms

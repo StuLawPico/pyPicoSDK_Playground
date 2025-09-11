@@ -1,8 +1,22 @@
+"""
+Trigger time offset correction example for a PicoScope 6000E device
+
+Description:
+  Captures multiple waveforms, retrieves trigger time offsets, and applies
+  corrections to align the waveforms.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib numpy pypicosdk
+
+Setup:
+  - Connect Channel A to the signal generator output
+"""
+
 import pypicosdk as psdk
 import matplotlib.pyplot as plt
 import numpy as np
-
-# Pico examples use inline argument values for clarity
 
 
 # Scope setup

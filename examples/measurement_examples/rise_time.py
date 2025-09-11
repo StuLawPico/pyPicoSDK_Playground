@@ -1,12 +1,21 @@
 """
-Capture PicoScope data, measure fall time, and plot waveform.
+Rise time measurement example for a PicoScope 6000E device
+
+Description:
+  Captures PicoScope data, measures rise time, and plots the waveform.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib pypicosdk
+
+Setup:
+  - Connect Channel A to the AWG output
 """
 from measurements import rise_time
 
 from matplotlib import pyplot as plt
 import pypicosdk as psdk
-
-# Pico examples use inline argument values for clarity
 
 # Capture configuration
 SAMPLES = 5_000

@@ -1,16 +1,24 @@
 """
-This is an example of single-channel streaming mode displayed to
-a pyplot animation plot.
+Streaming live plot example for a PicoScope 6000E device
 
-To do this it uses the StreamingScope class from pypicosdk.streaming
-and runs a thread containing the streaming loop.
+Description:
+  Displays single-channel streaming data using a matplotlib animation. The
+  StreamingScope class runs the streaming loop in a separate thread.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib numpy pypicosdk
+
+Setup:
+  - Connect Channel A to the signal source
 
 Downsampling:
-    This streaming example uses AGGREGATE downsampling. This retrieves 2 buffer instead of 1.
-    The two buffers are the MIN and MAX value over X samples, (X being ratio).
-    The midpoint is calculated and displayed to pyplot.
+    This streaming example uses AGGREGATE downsampling. Two buffers
+    (MIN and MAX) are returned for each group of samples. The midpoint
+    is calculated and displayed.
 
-    If using any other downsampling method, stream.buffer only outputs a single buffer.
+    Using other downsampling methods will return a single buffer.
 """
 
 import threading

@@ -1,12 +1,17 @@
 """
-This example produces a sweep sine wave out of the AWG. 
+Sinusoidal sweep example for a PicoScope 6000E device
+
+Description:
+  Produces a swept sine wave from the AWG and outputs it to Channel A.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib pypicosdk
 
 Setup:
-1. Plug 1 BNC end into AWG SigGen output of python PicoScope.
-2. Plug other BNC end into a seperate PicoScope to verify
-    the sweep waveform.
-3. This example uses input() to keep PicoScope open, press
-    return in console to exit example.
+  - Connect the AWG output to another PicoScope or measurement device
+  - Run the example and press return to stop
 """
 
 import pypicosdk as psdk

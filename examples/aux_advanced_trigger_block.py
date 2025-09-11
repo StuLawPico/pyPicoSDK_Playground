@@ -1,10 +1,10 @@
 """
-Auxiliary trigger example for a Picoscope 6000E device
+Auxiliary trigger example for a PicoScope 6000E device
 
 Description:
-  This example script captures a single aqusition with minimal abstraction
-  It is intended to demonstrate how to use the pyPicoSDK librarby to automate
-  your Picoscope device
+  This example script captures a single acquisition with minimal abstraction
+  It is intended to demonstrate how to use the pyPicoSDK library to automate
+  your PicoScope device
 
 Requirements:
 - PicoScope 6000E
@@ -12,8 +12,8 @@ Requirements:
   (pip install) matplotlib numpy pypicosdk
 
 Setup:
-  - Connect 6000E AWG output to AUX trig input & Channel A
-    of the oscilloscope using a tee BNC connector / cable or probe
+  - Connect 6000E AWG output to AUX trig input and Channel A
+    of the oscilloscope using a tee BNC connector, cable, or probe
 """
 
 import pypicosdk as psdk

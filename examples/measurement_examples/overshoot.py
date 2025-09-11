@@ -1,6 +1,17 @@
-"""Simple amplitude measurement using a block capture.
-Uses histogram-based top and base functions to provide a robust amplitude
-measurement. The script can also calculate RMS amplitude.
+"""
+Overshoot measurement example for a PicoScope 6000E device
+
+Description:
+  Uses histogram-based top and base functions to calculate positive and
+  negative overshoot of a waveform.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib pypicosdk
+
+Setup:
+  - Connect Channel A to the AWG output
 """
 from measurements import positive_overshoot_filtered, negative_overshoot_filtered
 
