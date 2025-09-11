@@ -1,11 +1,17 @@
 """
-This examples shows how to use the eRes or resolution enhancement on a square helo
-wave. Pyplot will display the output showing a blue (origional) and orange
-(enhanced) waveform.
+Resolution enhancement example for a PicoScope 6000E device
+
+Description:
+  Demonstrates using eRes to improve resolution on a square wave.
+  The script displays the original and enhanced waveforms using matplotlib.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib pypicosdk
 
 Setup:
- - Connect:
-        Channel A to AWG Ouput via BNC or Probe
+  - Connect Channel A to the AWG output via BNC or probe
 """
 
 from matplotlib import pyplot as plt

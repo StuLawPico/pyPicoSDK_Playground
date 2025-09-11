@@ -1,13 +1,21 @@
 """
-Rapid block capture in pyPicoSDK.
+Rapid block capture example for a PicoScope 6000E device
+
+Description:
+  Demonstrates capturing multiple waveforms in rapid block mode and
+  overlaying the results on a single plot.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib pypicosdk
+
 Setup:
- - Connect Channel A to AWG output
+  - Connect Channel A to the AWG output
 """
 
 from matplotlib import pyplot as plt
 import pypicosdk as psdk
-
-# Pico examples use inline argument values for clarity
 
 # Configuration
 SAMPLES = 1000

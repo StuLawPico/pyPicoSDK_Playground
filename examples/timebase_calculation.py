@@ -1,9 +1,19 @@
 """
-Example to figure out the correct timebase value for a specific interval.
+Timebase calculation example for a PicoScope 6000E device
+
+Description:
+  Shows how to determine the correct timebase value for a specific
+  sampling interval.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) pypicosdk
+
+Setup:
+  - Connect any required probes to the oscilloscope
 """
 from pypicosdk import ps6000a, CHANNEL, RANGE, SAMPLE_RATE, TIME_UNIT
-
-# Pico examples use inline argument values for clarity
 
 # Variables
 interval_s = 10E-9 # 10 us

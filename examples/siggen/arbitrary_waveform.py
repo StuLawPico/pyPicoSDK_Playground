@@ -1,14 +1,20 @@
 """
-This example uses the Arbitrary Waveform Generater to generate a custom waveform.
-The waveform can be generated via numpy (as below)
-or can be taken from a csv and converted into a numpy array using np.array(csv)
+Arbitrary waveform example for a PicoScope 6000E device
+
+Description:
+  Generates a custom waveform using the arbitrary waveform generator (AWG)
+  and captures the resulting signal.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib numpy pypicosdk
 
 Setup:
-1. Connect the AWG SigGen port on the scope to channel A.
-2. Run the example.
+  - Connect the AWG output to Channel A
 
 Notes:
-- The maximum ADC limits of the AWG are -32767 and +32767 (signed int 16)
+  - The maximum ADC limits of the AWG are -32767 and +32767 (signed int16)
 """
 
 import pypicosdk as psdk

@@ -1,25 +1,22 @@
-##################################################################
-# FFT example for a PicoScope 6000E.
-#
-# Description:
-#   This will convert the voltage data to the frequency domain and
-#   display it in pyplot, also calculating the peak frequency.
-#
-# Requirements: 
-# - PicoScope 6000E
-# - Python packages:
-#   pip install matplotlib scipy numpy pypicosdk
-#
-# Setup:
-#   - Connect 6000E SigGen (AWG) to Channel A of the oscilloscope
-#     using a BNC cable or probe
-#
-##################################################################
+"""
+FFT example for a PicoScope 6000E device
+
+Description:
+  Converts captured voltage data to the frequency domain, displays it
+  using matplotlib, and calculates the peak frequency.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib scipy numpy pypicosdk
+
+Setup:
+  - Connect 6000E SigGen (AWG) to Channel A of the oscilloscope
+    using a BNC cable or probe
+"""
 
 import pypicosdk as psdk
 from matplotlib import pyplot as plt
-
-# Pico examples use inline argument values for clarity
 import numpy as np
 from scipy.fft import rfft, rfftfreq
 from scipy.signal import windows

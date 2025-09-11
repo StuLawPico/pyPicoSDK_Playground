@@ -1,15 +1,18 @@
 """
-This example displays the dead time between consecutive rapid block captures using a
-PicoScope. The script configures a signal generator to output a square wave, sets up a
-single-channel capture with a trigger, and collects multiple captures in rapid succession.
-It then retrieves trigger timing information to calculate and plot the dead time between
-captures.
+Dead time measurement example for a PicoScope 6000E device
+
+Description:
+  This example displays the dead time between consecutive rapid block captures.
+  A square wave is generated and captured repeatedly to determine the interval
+  between captures.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib pypicosdk
 
 Setup:
- - Connect Channel A to AWG Ouput
-
-Notes:
- - Pico examples use inline argument values for clarity
+  - Connect Channel A to the AWG output
 """
 from matplotlib import pyplot as plt
 import pypicosdk as psdk

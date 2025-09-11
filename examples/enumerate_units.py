@@ -1,15 +1,22 @@
-# This example enumerates all PicoScope units 
-# (supported in the wrapper) and returns the number 
-# of units and a list of serial numbers.
+"""
+Enumerate units example for PicoScope devices
+
+Description:
+  Enumerates all supported PicoScope units and prints the number of
+  detected devices along with their serial numbers.
+
+Requirements:
+- Python packages:
+  (pip install) pypicosdk
+
+Setup:
+  - Connect any supported PicoScope devices
+"""
 
 import pypicosdk as psdk
 
-# Pico examples use inline argument values for clarity
-
-# Enumerate units
+# Enumerate units and print the results
 n_units, unit_list = psdk.get_all_enumerated_units()
-
-# Print output
-print(f'Number of units: {n_units}')
-for i in unit_list:
-    print(f'Serial numbers: {i}')
+print(f"Number of units: {n_units}")
+for serial in unit_list:
+    print(f"Serial number: {serial}")

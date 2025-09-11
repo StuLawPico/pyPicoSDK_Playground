@@ -1,9 +1,13 @@
 """
-This script is an example of the kind of measurements you can do in python.
+Measurement helper functions for PicoScope examples
 
-These measurements demonstrate one of many methods of measuring the ADC data from your PicoScope.
-When making measurements yourself, always verify that your method is suitable for your
-hardware, signal characteristics, and accuracy requirements.
+Description:
+  Provides utility functions for analyzing waveform data such as
+  amplitude, rise time, fall time, and overshoot.
+
+Requirements:
+- Python packages:
+  (pip install) numpy
 """
 
 import numpy as np

@@ -1,13 +1,19 @@
 """
-This is a simple example to demonstrate getting started quickly using
-pyPicoSDK.
+Simple block capture example for a PicoScope 6000E device
+
+Description:
+  Demonstrates how to perform a basic block capture using pyPicoSDK.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib pypicosdk
+
 Setup:
- - Connect channel A to AWG output
+  - Connect Channel A to the AWG output
 """
 from matplotlib import pyplot as plt
 import pypicosdk as psdk
-
-# Pico examples use inline argument values for clarity
 
 # Capture configuration
 SAMPLES = 5_000

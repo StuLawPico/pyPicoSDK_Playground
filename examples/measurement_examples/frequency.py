@@ -1,5 +1,16 @@
-"""Simple frequency measurement using a block capture.
-Measures the signal frequency by averaging time between zero crossings.
+"""
+Frequency measurement example for a PicoScope 6000E device
+
+Description:
+  Measures signal frequency by averaging time between zero crossings.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib pypicosdk
+
+Setup:
+  - Connect Channel A to the signal source
 """
 from measurements import measure_frequency
 

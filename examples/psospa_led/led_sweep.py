@@ -1,9 +1,16 @@
 """
-This is an example of using the LED channel identification
-on the PSOSPA devices i.e. 3000E.
+LED sweep example for a PSOSPA device
 
-To exit the loop, use Ctrl+Z KeyboardInterrupt, or exit the
-terminal.
+Description:
+  Cycles the LED channel identification on PSOSPA (3000E) devices.
+
+Requirements:
+- PSOSPA (3000E) device
+- Python packages:
+  (pip install) pypicosdk
+
+Setup:
+  - Connect a PSOSPA device and ensure LEDs are visible
 """
 
 import pypicosdk as psdk

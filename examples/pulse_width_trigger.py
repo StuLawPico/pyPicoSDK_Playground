@@ -1,8 +1,18 @@
-"""Pulse width trigger example using advanced trigger mode.
-This script demonstrates configuring a pulse width qualifier to
-trigger when a high pulse on Channel A exceeds a user-defined width.
-The width is specified using :class:`pypicosdk.TIME_UNIT` in the same
-way as sample rates use :class:`pypicosdk.SAMPLE_RATE`.
+"""
+Pulse width trigger example for a PicoScope 6000E device
+
+Description:
+  Demonstrates configuring a pulse width qualifier to trigger when a
+  high pulse on Channel A exceeds a user-defined width. The width is
+  specified using :class:`pypicosdk.TIME_UNIT`.
+
+Requirements:
+- PicoScope 6000E
+- Python packages:
+  (pip install) matplotlib pypicosdk
+
+Setup:
+  - Connect the signal generator to Channel A with a loopback
 """
 
 import pypicosdk as psdk
