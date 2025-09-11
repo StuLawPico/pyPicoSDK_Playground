@@ -1,3 +1,5 @@
+"""Public interface for the PicoSDK Python wrapper."""
+
 import csv
 import numpy as np
 
@@ -60,8 +62,16 @@ def _export_to_csv_rapid(filename, channels_buffer, time_axis=None, time_unit='n
                     row.append(channels_buffer[channel][n][sample_number])
             csv_writer.writerow(row)
 
-def export_to_csv(filename:str, channels_buffer:dict, time_axis:list=None):
-    if '.csv' not in filename: filename += '.csv'
+def export_to_csv(filename: str, channels_buffer: dict, time_axis: list | None = None) -> None:
+    """Export captured channel data to a CSV file.
+
+    Args:
+        filename (str): Output filename. ``.csv`` is appended if missing.
+        channels_buffer (dict): Mapping of channel indices to buffers.
+        time_axis (list | None): Optional list of time-axis values.
+    """
+    if '.csv' not in filename:
+        filename += '.csv'
     if type(channels_buffer[0]) == list:
         _export_to_csv_rapid(filename, channels_buffer, time_axis)
     elif type(channels_buffer[0]) == np.array:
@@ -74,8 +84,7 @@ def convert_time_axis(
         current_units:str|TimeUnit_L,
         convert_units:str|TimeUnit_L
     ) -> tuple[np.ndarray, str]:
-    """
-    Converts a time axis array from one unit to another.
+    """Convert a time axis array from one unit to another.
 
     This method calculates a scaling factor by comparing the exponents of the
     current and target units, then multiplies the time axis array by this
@@ -102,8 +111,7 @@ def convert_time_axis(
 
 
 def resolution_enhancement(buffer:np.ndarray, enhanced_bits:float, padded:bool=True) -> np.ndarray:
-    """
-    Returns the buffer after applying a moving average filter with the specified window size.
+    """Return the buffer after applying a moving average filter with the specified window size.
 
     Args:
         buffer: The input numpy array (e.g., the voltage buffer).

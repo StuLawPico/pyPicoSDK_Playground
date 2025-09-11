@@ -1,3 +1,5 @@
+"""Mapping of PicoSDK error codes to descriptive strings."""
+
 ERROR_STRING = {
 	0: "Pico ok",
 	1: "Pico max units opened",

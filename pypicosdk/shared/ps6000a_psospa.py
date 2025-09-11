@@ -1,3 +1,5 @@
+"""Shared PicoScope 6000A and PSOSPA helper functions."""
+
 import ctypes
 import numpy as np
 
@@ -24,20 +26,20 @@ from ..common import (
 from ._protocol import _ProtocolBase
 
 class shared_ps6000a_psospa(_ProtocolBase):
-    """Shared functions between ps6000a and psospa"""
+    """Shared functions between ps6000a and psospa."""
+
     probe_scale: dict[float]
 
     def get_adc_limits(self) -> tuple:
-        """
-        Gets the ADC limits for specified devices.
+        """Get the ADC limits for specified devices.
 
-        Currently tested on: 6000a.
+        Currently tested on the 6000a series.
 
         Returns:
-                tuple: (minimum value, maximum value)
+            tuple: Minimum and maximum ADC values.
 
         Raises:
-                PicoSDKException: If device hasn't been initialized.
+            PicoSDKException: If the device has not been initialized.
         """
         if self.resolution is None:
             raise PicoSDKException("Device has not been initialized, use open_unit()")
@@ -65,13 +67,12 @@ class shared_ps6000a_psospa(_ProtocolBase):
                 ``first_segment_index``.
 
         Returns:
-            List of dictionaries for each trigger event
+            List of dictionaries for each trigger event.
 
         Raises:
             PicoSDKException: If the function call fails or preconditions are
                 not met.
         """
-
         info_array = (PICO_TRIGGER_INFO * segment_count)()
 
         self._call_attr_function(
@@ -104,14 +105,11 @@ class shared_ps6000a_psospa(_ProtocolBase):
             from_segment_index: Index of the first segment to read.
             to_segment_index: Index of the last segment in the range.
             down_sample_ratio: Downsampling ratio to apply before copying.
-            down_sample_ratio_mode: Downsampling mode from
-                :class:`RATIO_MODE`.
+            down_sample_ratio_mode: Downsampling mode from :class:`RATIO_MODE`.
             lp_data_ready: Callback invoked when data is available. The callback
-                signature should be ``callback(handle, status, n_samples,
-                overflow)``.
+                signature should be ``callback(handle, status, n_samples, overflow)``.
             p_parameter: User parameter passed through to ``lp_data_ready``.
         """
-
         self._call_attr_function(
             "GetValuesBulkAsync",
             self.handle,
@@ -131,7 +129,6 @@ class shared_ps6000a_psospa(_ProtocolBase):
         Call this when overlapped captures are complete to release any
         resources allocated by :meth:`get_values_overlapped`.
         """
-
         self._call_attr_function(
             "StopUsingGetValuesOverlapped",
             self.handle,
@@ -139,10 +136,10 @@ class shared_ps6000a_psospa(_ProtocolBase):
 
     def set_trigger_holdoff_counter_by_samples(self, samples: int) -> None:
         """Set the trigger holdoff period in sample intervals.
+
         Args:
             samples: Number of samples for the holdoff period.
         """
-
         self._call_attr_function(
             "SetTriggerHoldoffCounterBySamples",
             self.handle,
@@ -155,12 +152,12 @@ class shared_ps6000a_psospa(_ProtocolBase):
         directions: list[PICO_DIGITAL_CHANNEL_DIRECTIONS] | None,
     ) -> None:
         """Configure digital port trigger directions.
+
         Args:
             port: Digital port identifier.
             directions: Optional list of channel directions to set. ``None`` to
                 clear existing configuration.
         """
-
         if directions:
             array_type = PICO_DIGITAL_CHANNEL_DIRECTIONS * len(directions)
             dir_array = array_type(*directions)
@@ -185,8 +182,9 @@ class shared_ps6000a_psospa(_ProtocolBase):
         threshold_mode: int,
     ) -> None:
         """Set pulse width qualifier direction for ``channel``.
-        If multiple directions are needed, channel, direction and threshold_mode
-        can be given a list of values.
+
+        If multiple directions are needed, channel, direction and ``threshold_mode``
+        can be given as lists of values.
 
         Args:
             channel (CHANNEL | list): Single or list of channels to configure.
@@ -216,12 +214,12 @@ class shared_ps6000a_psospa(_ProtocolBase):
         directions: list[PICO_DIGITAL_CHANNEL_DIRECTIONS] | None,
     ) -> None:
         """Configure digital port properties for pulse-width triggering.
+
         Args:
             port: Digital port identifier.
             directions: Optional list of channel directions to set. ``None`` to
                 clear existing configuration.
         """
-
         if directions:
             array_type = PICO_DIGITAL_CHANNEL_DIRECTIONS * len(directions)
             dir_array = array_type(*directions)
@@ -241,10 +239,10 @@ class shared_ps6000a_psospa(_ProtocolBase):
 
     def trigger_within_pre_trigger_samples(self, state: int) -> None:
         """Control trigger positioning relative to pre-trigger samples.
-        Args:
-            state: 0 to enable, 1 to disable
-        """
 
+        Args:
+            state: ``0`` to enable, ``1`` to disable.
+        """
         self._call_attr_function(
             "TriggerWithinPreTriggerSamples",
             self.handle,
@@ -264,28 +262,26 @@ class shared_ps6000a_psospa(_ProtocolBase):
             dwell_time:float = 0.001,
             sweep_type:SWEEP_TYPE = SWEEP_TYPE.UP,
         ) -> dict:
-        """Configures and applies the signal generator settings.
+        """Configure and apply signal generator settings.
 
         Sets up the signal generator with the specified waveform type, frequency,
-        amplitude (peak-to-peak), offset, and duty cycle.
-
-        If sweep is enabled and the sweep-related args are given, the SigGen will sweep.
+        amplitude (peak-to-peak), offset, and duty cycle. If sweep is enabled and the
+        sweep-related arguments are provided, the signal generator performs a sweep.
 
         Args:
             frequency (float): Signal frequency in hertz (Hz).
             pk2pk (float): Peak-to-peak voltage in volts (V).
-            wave_type (WAVEFORM): Waveform type (e.g., WAVEFORM.SINE, WAVEFORM.SQUARE).
+            wave_type (WAVEFORM): Waveform type (e.g., ``WAVEFORM.SINE``).
             offset (float, optional): Voltage offset in volts (V).
-            duty (int or float, optional): Duty cycle as a percentage (0–100).
-            sweep: If True, sweep is enabled, fill in the following:
-            stop_freq: Frequency to stop sweep at in Hertz (Hz). Defaults to None.
-            inc_freq: Frequency to increment (or step) in hertz (Hz). Defaults to 1 Hz.
-            dwell_time: Time to wait between frequency steps in seconds (s). Defaults to 1 ms.
-            sweep_type: Direction of sweep ``[UP, DOWN, UPDOWN, DOWNUP]``. Defaults to UP.
-
+            duty (int | float, optional): Duty cycle as a percentage (0–100).
+            sweep: If True, sweep is enabled.
+            stop_freq: Frequency to stop sweep at in hertz (Hz). Defaults to ``None``.
+            inc_freq: Frequency increment in hertz (Hz). Defaults to 1 Hz.
+            dwell_time: Time between frequency steps in seconds (s). Defaults to 1 ms.
+            sweep_type: Direction of sweep ``[UP, DOWN, UPDOWN, DOWNUP]``. Defaults to ``UP``.
 
         Returns:
-            dict: Returns dictionary of the actual achieved values.
+            dict: Dictionary of the actual achieved values.
         """
         # Check if typing Literal
         if wave_type in waveform_map:
@@ -304,18 +300,17 @@ class shared_ps6000a_psospa(_ProtocolBase):
 
     def siggen_apply(self, enabled=1, sweep_enabled=0, trigger_enabled=0,
                      auto_clock_optimise_enabled=0, override_auto_clock_prescale=0) -> dict:
-        """
-        Sets the signal generator running using parameters previously configured.
+        """Run the signal generator using previously configured parameters.
 
         Args:
-                enabled (int, optional): SigGen Enabled,
-                sweep_enabled (int, optional): Sweep Enabled,
-                trigger_enabled (int, optional): SigGen trigger enabled,
-                auto_clock_optimise_enabled (int, optional): Auto Clock Optimisation,
-                override_auto_clock_prescale (int, optional): Override Clock Prescale,
+            enabled (int, optional): Signal generator enabled flag.
+            sweep_enabled (int, optional): Sweep enabled flag.
+            trigger_enabled (int, optional): Trigger enabled flag.
+            auto_clock_optimise_enabled (int, optional): Auto clock optimisation flag.
+            override_auto_clock_prescale (int, optional): Override clock prescale flag.
 
         Returns:
-                dict: Returns dictionary of the actual achieved values.
+            dict: Dictionary of the actual achieved values.
         """
         c_frequency = ctypes.c_double()
         c_stop_freq = ctypes.c_double()
@@ -340,11 +335,10 @@ class shared_ps6000a_psospa(_ProtocolBase):
                 'dwelltime': c_dwell_time.value}
 
     def siggen_set_frequency(self, frequency:float) -> None:
-        """
-        Set frequency of SigGen in Hz.
+        """Set frequency of SigGen in hertz.
 
         Args:
-                frequency (int): Frequency in Hz.
+            frequency (int): Frequency in hertz.
         """
         self._call_attr_function(
             'SigGenFrequency',
@@ -353,11 +347,10 @@ class shared_ps6000a_psospa(_ProtocolBase):
         )
 
     def siggen_set_duty_cycle(self, duty:float) -> None:
-        """
-        Set duty cycle of SigGen in percentage
+        """Set duty cycle of SigGen in percentage.
 
         Args:
-                duty cycle (int): Duty cycle in %.
+            duty (int): Duty cycle in percent.
         """
         self._call_attr_function(
             'SigGenWaveformDutyCycle',
@@ -366,12 +359,11 @@ class shared_ps6000a_psospa(_ProtocolBase):
         )
 
     def siggen_set_range(self, pk2pk:float, offset:float=0.0):
-        """
-        Set mV range of SigGen (6000A).
+        """Set mV range of SigGen (6000A).
 
         Args:
-                pk2pk (int): Peak to peak of signal in volts (V).
-                offset (int, optional): Offset of signal in volts (V).
+            pk2pk (int): Peak-to-peak of signal in volts (V).
+            offset (int, optional): Offset of signal in volts (V).
         """
         self._call_attr_function(
             'SigGenRange',
@@ -381,14 +373,13 @@ class shared_ps6000a_psospa(_ProtocolBase):
         )
 
     def _siggen_get_buffer_args(self, buffer:np.ndarray) -> tuple[ctypes.POINTER, int]:
-        """
-        Takes a np buffer and returns a ctypes compatible pointer and buffer length.
+        """Take a NumPy buffer and return a ctypes pointer and length.
 
         Args:
-            buffer (np.ndarray): numpy buffer of data (between -32767 and +32767)
+            buffer (np.ndarray): NumPy buffer of data (between -32767 and +32767).
 
         Returns:
-            tuple[ctypes.POINTER, int]: Buffer pointer and buffer length
+            tuple[ctypes.POINTER, int]: Buffer pointer and buffer length.
         """
         buffer_len = buffer.size
         buffer = np.asanyarray(buffer, dtype=np.int16)
@@ -400,13 +391,13 @@ class shared_ps6000a_psospa(_ProtocolBase):
             wave_type: WAVEFORM,
             buffer:np.ndarray|None = None
         ) -> None:
-        """
-        Set waveform type for SigGen (6000A). If arbitrary mode is selected,
-        a buffer of ADC samples is needed.
+        """Set waveform type for SigGen (6000A).
+
+        If arbitrary mode is selected, a buffer of ADC samples is required.
 
         Args:
-                wave_type (WAVEFORM): Waveform type i.e. WAVEFORM.SINE.
-                buffer: np.array buffer to be used in WAVEFORM.ARBITRARY mode.
+            wave_type (WAVEFORM): Waveform type e.g. ``WAVEFORM.SINE``.
+            buffer: NumPy array buffer for ``WAVEFORM.ARBITRARY`` mode.
         """
         # Arbitrary buffer creation
         buffer_len = None
@@ -433,6 +424,7 @@ class shared_ps6000a_psospa(_ProtocolBase):
         manual_prescale_ratio: int | None = None,
     ) -> dict:
         """Query frequency sweep limits for the signal generator.
+
         Args:
             wave_type: Waveform type.
             num_samples: Number of samples in the arbitrary waveform buffer.
@@ -440,12 +432,12 @@ class shared_ps6000a_psospa(_ProtocolBase):
             sweep_enabled: Whether a sweep is enabled.
             manual_dac_clock_frequency: Optional manual DAC clock frequency.
             manual_prescale_ratio: Optional manual DAC prescale ratio.
+
         Returns:
             dict: Frequency limit information with keys ``max_stop_frequency``,
             ``min_frequency_step``, ``max_frequency_step``, ``min_dwell_time`` and
             ``max_dwell_time``.
         """
-
         c_num_samples = ctypes.c_uint64(num_samples)
         c_start_freq = ctypes.c_double(start_frequency)
 
@@ -493,12 +485,13 @@ class shared_ps6000a_psospa(_ProtocolBase):
 
     def siggen_limits(self, parameter: SIGGEN_PARAMETER) -> dict:
         """Query signal generator parameter limits.
+
         Args:
             parameter: Signal generator parameter to query.
+
         Returns:
             dict: Dictionary with keys ``min``, ``max`` and ``step``.
         """
-
         min_val = ctypes.c_double()
         max_val = ctypes.c_double()
         step = ctypes.c_double()
@@ -521,13 +514,13 @@ class shared_ps6000a_psospa(_ProtocolBase):
         sweep_type: SWEEP_TYPE,
     ) -> None:
         """Configure frequency sweep parameters.
+
         Args:
             stop_frequency_hz: End frequency of the sweep in Hz.
             frequency_increment: Increment value in Hz.
             dwell_time_s: Time to dwell at each frequency in seconds.
             sweep_type: Sweep direction.
         """
-
         self._call_attr_function(
             "SigGenFrequencySweep",
             self.handle,
@@ -542,14 +535,14 @@ class shared_ps6000a_psospa(_ProtocolBase):
 
         The signal generator uses direct digital synthesis (DDS) with a 32-bit phase accumulator that indicates the
         present location in the waveform. The top bits of the phase accumulator are used as an index into a buffer
-        containing the arbitrary waveform. The remaining bits act as the fractional part of the index, enabling highresolution control of output frequency and allowing the generation of lower frequencies.
-        The signal generator steps through the waveform by adding a deltaPhase value between 1 and
-        phaseAccumulatorSize-1 to the phase accumulator every dacPeriod (= 1/dacFrequency).
+        containing the arbitrary waveform. The remaining bits act as the fractional part of the index, enabling high
+        resolution control of output frequency and allowing the generation of lower frequencies. The signal generator
+        steps through the waveform by adding a ``deltaPhase`` value between ``1`` and ``phaseAccumulatorSize-1`` to the
+        phase accumulator every ``dacPeriod`` (``1 / dacFrequency``).
 
         Args:
             delta_phase: Phase offset to apply.
         """
-
         self._call_attr_function(
             "SigGenPhase",
             self.handle,
@@ -564,13 +557,13 @@ class shared_ps6000a_psospa(_ProtocolBase):
         sweep_type: SWEEP_TYPE,
     ) -> None:
         """Configure a phase sweep for the signal generator.
+
         Args:
             stop_delta_phase: End phase in DAC counts.
             delta_phase_increment: Increment value in DAC counts.
             dwell_count: Number of DAC cycles to dwell at each phase step.
             sweep_type: Sweep direction.
         """
-
         self._call_attr_function(
             "SigGenPhaseSweep",
             self.handle,
@@ -582,20 +575,18 @@ class shared_ps6000a_psospa(_ProtocolBase):
 
     def siggen_pause(self) -> None:
         """Pause the signal generator."""
-
         self._call_attr_function("SigGenPause", self.handle)
 
     def siggen_restart(self) -> None:
         """Restart the signal generator after a pause."""
-
         self._call_attr_function("SigGenRestart", self.handle)
 
     def siggen_software_trigger_control(self, trigger_state: int) -> None:
         """Control software triggering for the signal generator.
+
         Args:
             trigger_state: ``1`` to enable the software trigger, ``0`` to disable.
         """
-
         self._call_attr_function(
             "SigGenSoftwareTriggerControl",
             self.handle,
@@ -610,13 +601,13 @@ class shared_ps6000a_psospa(_ProtocolBase):
         auto_trigger_ps: int = 0,
     ) -> None:
         """Configure signal generator triggering.
+
         Args:
             trigger_type: Trigger type to use.
             trigger_source: Source for the trigger.
             cycles: Number of cycles before the trigger occurs.
             auto_trigger_ps: Time in picoseconds before auto-triggering.
         """
-
         self._call_attr_function(
             "SigGenTrigger",
             self.handle,
@@ -639,33 +630,30 @@ class shared_ps6000a_psospa(_ProtocolBase):
             dwell_time:float = 0.001,
             sweep_type:SWEEP_TYPE = SWEEP_TYPE.UP,
         ) -> dict:
-        """
-        Arbitrary Waveform Generation - Generates a signal from a given buffer.
+        """Generate a signal from a buffer using the arbitrary waveform generator.
 
         Sets up the signal generator with a specified frequency, amplitude (peak-to-peak),
-        offset, and duty cycle.
-
-        If sweep is enabled and the sweep-related args are given, the SigGen will sweep.
+        offset, and duty cycle. If sweep is enabled and the sweep-related arguments are
+        provided, the signal generator performs a frequency sweep.
 
         Args:
             frequency (float): Signal frequency in hertz (Hz).
             pk2pk (float): Peak-to-peak voltage in volts (V).
-            buffer (np.ndarray | list): _description_
+            buffer (np.ndarray | list): Waveform buffer to output.
             offset (float, optional): Voltage offset in volts (V). Defaults to 0.0.
             duty (float, optional): Duty cycle as a percentage (0–100). Defaults to 50.
-            sweep (bool, optional): If True, sweep is enabled, fill in the following:
-            stop_freq (float, optional): Frequency to stop sweep at in Hertz (Hz). Defaults to None.
-            inc_freq (float, optional): Frequency to increment (or step) in hertz (Hz). Defaults to 1.
-            dwell_time (float, optional): Time to wait between frequency steps in seconds (s). Defaults to 0.001.
-            sweep_type (SWEEP_TYPE, optional): Direction of sweep ``[UP, DOWN, UPDOWN, DOWNUP]``. Defaults to UP.
+            sweep (bool, optional): If True, sweep is enabled.
+            stop_freq (float, optional): Frequency to stop sweep at in hertz (Hz). Defaults to None.
+            inc_freq (float, optional): Frequency increment in hertz (Hz). Defaults to 1.
+            dwell_time (float, optional): Time between frequency steps in seconds (s). Defaults to 0.001.
+            sweep_type (SWEEP_TYPE, optional): Direction of sweep ``[UP, DOWN, UPDOWN, DOWNUP]``. Defaults to ``UP``.
 
         Raises:
-            PicoSDKException: _description_
+            PicoSDKException: If sweep is enabled without a stop frequency.
 
         Returns:
-            dict: _description_
+            dict: Result from ``siggen_apply``.
         """
-
         self.siggen_set_waveform(WAVEFORM.ARBITRARY, buffer=buffer)
         self.siggen_set_range(pk2pk, offset)
         self.siggen_set_frequency(frequency)
@@ -681,7 +669,6 @@ class shared_ps6000a_psospa(_ProtocolBase):
         self, range: PICO_CONNECT_PROBE_RANGE, coupling: COUPLING
     ) -> tuple[float, float]:
         """Get the allowed analogue offset range for ``range`` and ``coupling``."""
-
         max_v = ctypes.c_double()
         min_v = ctypes.c_double()
         self._call_attr_function(
@@ -747,7 +734,7 @@ class shared_ps6000a_psospa(_ProtocolBase):
             self.set_channel_off(channel)
 
     def set_channel_on(self, channel, range, coupling=COUPLING.DC, offset=0.0, bandwidth=BANDWIDTH_CH.FULL):
-        """Sets a channel to ON at a specified range (6000E)"""
+        """Set a channel to ON at a specified range (6000E)."""
         self.range[channel] = range
         status = self._call_attr_function(
             'SetChannelOn',
@@ -761,7 +748,7 @@ class shared_ps6000a_psospa(_ProtocolBase):
         return status
 
     def set_channel_off(self, channel):
-        """Sets a channel to OFF (6000E)"""
+        """Set a channel to OFF (6000E)."""
         status = self._call_attr_function(
             'SetChannelOff',
             self.handle,
@@ -770,13 +757,11 @@ class shared_ps6000a_psospa(_ProtocolBase):
         return status
 
     def set_aux_io_mode(self, mode: AUXIO_MODE) -> None:
-
         """Configure the AUX IO connector using ``ps6000aSetAuxIoMode``.
 
         Args:
             mode: Requested AUXIO mode from :class:`~pypicosdk.constants.AUXIO_MODE`.
         """
-
         self._call_attr_function(
             "SetAuxIoMode",
             self.handle,
@@ -795,7 +780,6 @@ class shared_ps6000a_psospa(_ProtocolBase):
         Returns:
             int: Number of segments the memory was divided into.
         """
-
         max_segments = ctypes.c_uint64()
         self._call_attr_function(
             "MemorySegmentsBySamples",
@@ -826,7 +810,6 @@ class shared_ps6000a_psospa(_ProtocolBase):
         Raises:
             PicoSDKException: If the device has not been opened.
         """
-
         if self.resolution is None:
             raise PicoSDKException("Device has not been initialized, use open_unit()")
 
@@ -843,11 +826,12 @@ class shared_ps6000a_psospa(_ProtocolBase):
 
     def reset_channels_and_report_all_channels_overvoltage_trip_status(self) -> list[PICO_CHANNEL_OVERVOLTAGE_TRIPPED]:
         """Reset channels and return overvoltage trip status for each.
+
         Wraps ``ps6000aResetChannelsAndReportAllChannelsOvervoltageTripStatus``.
+
         Returns:
             list[PICO_CHANNEL_OVERVOLTAGE_TRIPPED]: Trip status for all channels.
         """
-
         n_channels = len(CHANNEL_NAMES)
         status_array = (PICO_CHANNEL_OVERVOLTAGE_TRIPPED * n_channels)()
         self._call_attr_function(
@@ -872,7 +856,6 @@ class shared_ps6000a_psospa(_ProtocolBase):
             logic_threshold_level: Threshold level for each pin in millivolts.
             hysteresis: Hysteresis level applied to all pins.
         """
-
         level_array = (ctypes.c_int16 * len(logic_threshold_level))(
             *logic_threshold_level
         )
@@ -888,7 +871,6 @@ class shared_ps6000a_psospa(_ProtocolBase):
 
     def set_digital_port_off(self, port: DIGITAL_PORT) -> None:
         """Disable a digital port using ``ps6000aSetDigitalPortOff``."""
-
         self._call_attr_function(
             "SetDigitalPortOff",
             self.handle,
@@ -897,6 +879,7 @@ class shared_ps6000a_psospa(_ProtocolBase):
 
     def get_maximum_available_memory(self) -> int:
         """Return the maximum sample depth for the current resolution.
+
         Wraps ``ps6000aGetMaximumAvailableMemory`` to query how many samples
         can be captured at ``self.resolution``.
         Returns:
@@ -904,7 +887,6 @@ class shared_ps6000a_psospa(_ProtocolBase):
         Raises:
             PicoSDKException: If the device has not been opened.
         """
-
         if self.resolution is None:
             raise PicoSDKException("Device has not been initialized, use open_unit()")
 
@@ -921,13 +903,13 @@ class shared_ps6000a_psospa(_ProtocolBase):
         self,
     ) -> list[PICO_CHANNEL_OVERVOLTAGE_TRIPPED]:
         """Return the overvoltage trip status for each channel.
+
         This wraps ``ps6000aReportAllChannelsOvervoltageTripStatus`` to
         query whether any channel's 50 Ω input protection has tripped.
         Returns:
             list[PICO_CHANNEL_OVERVOLTAGE_TRIPPED]: Trip status for all
             channels.
         """
-
         n_channels = len(CHANNEL_NAMES)
         array_type = PICO_CHANNEL_OVERVOLTAGE_TRIPPED * n_channels
         status_array = array_type()

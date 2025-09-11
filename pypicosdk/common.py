@@ -1,42 +1,44 @@
+"""Common helpers and exceptions for the PicoSDK wrapper."""
+
 import ctypes
 import platform
 import os
 from typing import Any
 
+
 class PicoSDKNotFoundException(Exception):
-    pass
+    """Raised when the PicoSDK is not installed."""
 
 
 class PicoSDKException(Exception):
-    pass
+    """Generic PicoSDK exception."""
 
 
 class OverrangeWarning(UserWarning):
-    pass
+    """Warning for overrange conditions."""
 
 
 class PowerSupplyWarning(UserWarning):
-    pass
+    """Warning for missing or faulty power supply."""
 
 
 class BufferTooSmall(UserWarning):
-    "User warning for 407 status from streaming"
+    """User warning for 407 status from streaming."""
 
 
 # General Functions
 def _check_path(location:str, folders:list) -> str:
-    """Checks a list of folders in a location i.e. ['Pico Technology']
-       in /ProgramFiles/ and returns first full path found
+    """Check a list of folders in a location and return the first path found.
 
     Args:
-        location (str): Path to check for folders
-        folders (list): List of folders to look for
+        location (str): Path to check for folders.
+        folders (list): List of folders to look for.
 
     Raises:
-        PicoSDKException: If not found, raise an error for user
+        PicoSDKException: If not found, raise an error for user.
 
     Returns:
-        str: Full path of the first located folder
+        str: Full path of the first located folder.
     """
     for folder in folders:
         path = os.path.join(location, folder)
@@ -47,14 +49,13 @@ def _check_path(location:str, folders:list) -> str:
     )
 
 def _get_lib_path() -> str:
-    """Looks for PicoSDK folder based on OS and returns folder
-       path
+    """Look for the PicoSDK folder based on the OS and return its path.
 
     Raises:
-        PicoSDKException: If unsupported OS
+        PicoSDKException: If unsupported OS.
 
     Returns:
-        str: Full path of PicoSDK folder location
+        str: Full path of PicoSDK folder location.
     """
     system = platform.system()
     if system == "Windows":
@@ -73,13 +74,13 @@ def _get_lib_path() -> str:
         raise PicoSDKException("Unsupported OS")
     
 def _struct_to_dict(struct_instance: ctypes.Structure, format=False) -> dict:
-    """Takes a ctypes struct and returns the values as a python dict
+    """Take a ctypes struct and return the values as a Python dict.
 
     Args:
-        struct_instance (ctypes.Structure): ctype structure to convert into dictionary
+        struct_instance (ctypes.Structure): ctype structure to convert into a dictionary.
 
     Returns:
-        dict: python dictionary of struct values
+        dict: Python dictionary of struct values.
     """
     result = {}
     for field_name, _ in struct_instance._fields_:
@@ -91,8 +92,7 @@ def _struct_to_dict(struct_instance: ctypes.Structure, format=False) -> dict:
 
 
 def _get_literal(variable: str | Any, map_dict: dict, type_fail=False) -> int:
-    """Checks if typing Literal variable is in corresponding map
-    and returns enum integer value.
+    """Check if a typing Literal variable is in the map and return its integer value.
 
     Args:
         variable (str | Any): Variable to find in map dict.

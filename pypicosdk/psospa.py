@@ -235,15 +235,14 @@ class psospa(PicoScopeBase, shared_ps6000a_psospa):
         self.set_led_colours(led_list, [hue] * len(led_list), [saturation] * len(led_list))
 
     def set_led_colours(
-            self, 
-            led:led_channel_l | list[led_channel_l], 
-            hue:int | led_colours_l | list[int] | list[led_colours_l], 
+            self,
+            led:led_channel_l | list[led_channel_l],
+            hue:int | led_colours_l | list[int] | list[led_colours_l],
             saturation:int | list[int]
         ) -> None:
-        """Sets the colour of the selected LED using HUE and Saturation
+        """Set the colour of the selected LED using hue and saturation.
 
-        It will not take affect until one of the following 
-        functions are ran:
+        It will not take effect until one of the following functions are run:
          - run_block_capture()
          - run_streaming()
          - set_aux_io_mode()
@@ -286,8 +285,7 @@ class psospa(PicoScopeBase, shared_ps6000a_psospa):
         )
     
     def set_all_led_states(self,state:str|led_state_l):
-        """
-        Sets the state of all LED's on the PicoScope.
+        """Set the state of all LEDs on the PicoScope.
 
         Args:
             state (str): ['auto', 'on', 'off']
@@ -297,10 +295,10 @@ class psospa(PicoScopeBase, shared_ps6000a_psospa):
         self.set_led_states(led_list, [state] * len(led_list))
 
     def set_led_states(self, led:str|led_channel_l|list[led_channel_l], state:str|led_state_l|list[led_state_l]):
-        """
-        Sets the state for a selected LED. Between default behaviour (auto),
-        on or off.
-        
+        """Set the state for a selected LED.
+
+        The state can be auto, on or off.
+
         Args:
             led (str): The selected LED. Must be one of these values:
                 `'A'`, `'B'`, `'C'`, `'D'`, `'E'`, `'F'`, `'G'`, `'H'`, `'AWG'`, `'AUX'`.

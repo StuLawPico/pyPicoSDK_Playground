@@ -1,17 +1,4 @@
-"""
-This is a streaming scope class. Due to how streaming works, it needs its own
-class and config independant to the main PicoScope drivers.
-To use this class do the following:
- - Initialise the class: `stream = StreamingScope()`
- - Configure the class: `stream.config(...)`
- - Run streaming (in a thread): `stream.start_streaming_while()`
- - To stop use `stream.stop()
-
-Todo:
- - Multichannel
-    - get_streaming_latest_values() PICO_STREAMIN_DATA_INFO needs to be a list
-      of structs
-"""
+"""Streaming utilities for PicoScope devices."""
 from warnings import warn
 import numpy as np
 from .constants import (
@@ -29,8 +16,10 @@ from .pypicosdk import psospa, ps6000a
 
 
 class StreamingScope:
-    """Streaming Scope class"""
+    """Streaming scope class."""
+
     def __init__(self, scope: ps6000a | psospa):
+        """Initialize the streaming scope wrapper."""
         self.scope = scope
         self.stop_bool = False  # Bool to stop streaming while loop
         self.msps_current = 0
@@ -75,9 +64,9 @@ class StreamingScope:
         ratio_mode: RATIO_MODE = RATIO_MODE.RAW,
         data_type: DATA_TYPE = DATA_TYPE.INT16_T,
     ) -> None:
-        """
-        Configures the streaming settings for data acquisition. This method
-        sets up the channel, sample counts, timing intervals, and buffer
+        """Configure the streaming settings for data acquisition.
+
+        This sets up the channel, sample counts, timing intervals, and buffer
         management for streaming data from the device.
 
         Args:
@@ -138,11 +127,11 @@ class StreamingScope:
         ratio_mode: RATIO_MODE = RATIO_MODE.RAW,
         data_type: DATA_TYPE = DATA_TYPE.INT16_T,
     ) -> None:
-        """
-        !NOT YET IMPLEMETED!
-        Adds a channel configuration for data acquisition.
+        """Add a channel configuration for data acquisition.
 
-        This method appends a new channel configuration to the internal list,
+        Note: this method is not yet implemented.
+
+        This appends a new channel configuration to the internal list,
         specifying the channel, ratio mode, and data type to be used for
         streaming.
 
@@ -159,9 +148,11 @@ class StreamingScope:
         self.channel_config.append([channel, ratio_mode, data_type])
 
     def _stream_set_data_buffer(self, buffer_index: int):
-        """Set data buffer function for consistency when creating a new buffer
+        """Set the data buffer when creating a new buffer.
+
         Args:
-            buffer_index (int): Index of buffer to set to PicoScope"""
+            buffer_index (int): Index of buffer to set to PicoScope.
+        """
         if self.ratio_mode == RATIO_MODE.AGGREGATE:
             self.scope.set_data_buffers(
                 self.channel,
@@ -180,8 +171,7 @@ class StreamingScope:
                 )
 
     def run_streaming(self) -> None:
-        """
-        Initiates the data streaming process.
+        """Initiate the data streaming process.
 
         This method prepares the device for streaming by clearing existing
         data buffers, setting up a new data buffer for the selected channel,
@@ -211,8 +201,7 @@ class StreamingScope:
         )
 
     def get_streaming_values(self) -> None:
-        """
-        Main loop for handling streaming data acquisition.
+        """Handle streaming data acquisition in the main loop.
 
         This method retrieves the latest streaming data from the device,
         appends new samples to the internal buffer array, and manages buffer
@@ -272,23 +261,18 @@ class StreamingScope:
                                [-self.max_buffer_size:])
 
     def start_streaming_while(self) -> None:
-        """
-        Starts and continuously runs the streaming acquisition loop until
-        StreamingScope.stop() is called.
-        """
+        """Start and run the streaming acquisition loop until stopped."""
         self.run_streaming()
         while not self.stop_bool:
             self.get_streaming_values()
         self.scope.stop()
 
     def _run_streaming_for(self, n_times) -> None:
-        """
-        Runs the streaming acquisition loop for a fixed number of iterations.
+        """Run the streaming acquisition loop for a fixed number of iterations.
 
         Args:
             n_times (int): Number of iterations to run the streaming loop.
         """
-
         if self.max_buffer_size is not None:
             warn('max_buffer_data needs to be None to retrieve the full '
                  'streaming data.')
@@ -298,17 +282,15 @@ class StreamingScope:
         self.scope.stop()
 
     def _run_streaming_for_samples(self, no_of_samples) -> np.ndarray:
-        """
-        Runs streaming acquisition until a specified number of samples are
-        collected. The loop will terminate early if `StreamingScope.stop()` is
-        called.
+        """Run streaming acquisition until a specified number of samples are collected.
+
+        The loop terminates early if ``StreamingScope.stop()`` is called.
 
         Args:
-            no_of_samples (int):
-                The total number of samples to acquire before stopping.
+            no_of_samples (int): The total number of samples to acquire before stopping.
 
         Returns:
-            numpy.ndarray: The buffer array containing the collected samples.
+            numpy.ndarray: Buffer array containing the collected samples.
         """
         self.run_streaming()
         while not self.stop_bool:

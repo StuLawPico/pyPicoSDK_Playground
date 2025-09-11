@@ -1,6 +1,9 @@
+"""Internal protocol base for shared methods."""
+
 from typing import Protocol
 
 
 class _ProtocolBase(Protocol):
-    """Protocol placeholder class for shared methods"""
+    """Protocol placeholder class for shared methods."""
+
     def _set_ylim(self, *args, **kwargs): ...
