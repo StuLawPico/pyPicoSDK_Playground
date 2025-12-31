@@ -1574,12 +1574,15 @@ class PicoScopeBase:
             buffer = np.zeros(samples, dtype=np_dtype)
             buf_ptr = npc.as_ctypes(buffer)
 
+        # Explicitly convert samples to c_uint64 to support larger buffer sizes
+        # (SDK may accept uint64 even if documentation suggests int32)
+        c_samples = ctypes.c_uint64(samples)
         self._call_attr_function(
             "SetDataBuffer",
             self.handle,
             channel,
             buf_ptr,
-            samples,
+            c_samples,
             datatype,
             segment,
             ratio_mode,
@@ -1635,13 +1638,15 @@ class PicoScopeBase:
 
             buffer = np.zeros((captures, samples), dtype=np_dtype)
 
+        # Explicitly convert samples to c_uint64 to support larger buffer sizes
+        c_samples = ctypes.c_uint64(samples)
         for i in range(captures):
             self._call_attr_function(
                 "SetDataBuffer",
                 self.handle,
                 channel,
                 npc.as_ctypes(buffer[i]),
-                samples,
+                c_samples,
                 datatype,
                 segment + i,
                 ratio_mode,
@@ -1703,13 +1708,15 @@ class PicoScopeBase:
         buf_max_ptr = npc.as_ctypes(buffer_max)
         buf_min_ptr = npc.as_ctypes(buffer_min)
 
+        # Explicitly convert samples to c_uint64 to support larger buffer sizes
+        c_samples = ctypes.c_uint64(samples)
         self._call_attr_function(
             "SetDataBuffers",
             self.handle,
             channel,
             buf_max_ptr,
             buf_min_ptr,
-            samples,
+            c_samples,
             datatype,
             segment,
             ratio_mode,
@@ -1766,6 +1773,8 @@ class PicoScopeBase:
 
             buffer = np.zeros((captures, samples, 2), dtype=np_dtype)
 
+        # Explicitly convert samples to c_uint64 to support larger buffer sizes
+        c_samples = ctypes.c_uint64(samples)
         for i in range(captures):
             self._call_attr_function(
                 "SetDataBuffers",
@@ -1773,7 +1782,7 @@ class PicoScopeBase:
                 channel,
                 npc.as_ctypes(buffer[i][0]),
                 npc.as_ctypes(buffer[i][1]),
-                samples,
+                c_samples,
                 datatype,
                 segment + i,
                 ratio_mode,
@@ -1998,8 +2007,8 @@ class PicoScopeBase:
             self.handle,
             ctypes.byref(c_sample_interval),
             time_units,
-            int(max_pre_trigger_samples),
-            int(max_post_trigger_samples),
+            ctypes.c_uint64(max_pre_trigger_samples),
+            ctypes.c_uint64(max_post_trigger_samples),
             auto_stop,
             ratio,
             ratio_mode,
