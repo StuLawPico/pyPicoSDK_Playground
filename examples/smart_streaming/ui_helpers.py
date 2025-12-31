@@ -11,17 +11,9 @@ import pypicosdk as psdk
 from hardware_helpers import (
     calculate_sample_rate, register_double_buffers, start_hardware_streaming,
     stop_hardware_streaming, clear_hardware_buffers, calculate_optimal_buffer_size,
-    validate_buffer_size, apply_trigger_configuration, time_to_samples, TIME_UNIT_TO_SECONDS,
-    get_datatype_for_mode
+    validate_buffer_size, apply_trigger_configuration, time_to_samples, TIME_UNIT_TO_SECONDS
 )
 import data_processing
-
-# Import Qt for deferred plot updates
-try:
-    from pyqtgraph.Qt import QtCore
-    QT_AVAILABLE = True
-except ImportError:
-    QT_AVAILABLE = False
 
 
 def apply_channel_siggen_settings(settings, scope):
@@ -517,10 +509,6 @@ def apply_streaming_restart(settings, scope, buffer_0, buffer_1, data_lock,
     old_buffer_size = settings.get('current_buffer_size', new_buffer_size)
     buffer_size_changed = (new_buffer_size != old_buffer_size)
     
-    # Check if mode changed (may require different datatype)
-    current_mode = settings.get('current_mode', new_mode)
-    mode_changed = (new_mode != current_mode)
-    
     # Note: settings_update_in_progress flag is set by caller before this function
     print("Starting streaming restart...")
     
@@ -555,17 +543,14 @@ def apply_streaming_restart(settings, scope, buffer_0, buffer_1, data_lock,
         perf_samples_window.clear()  # Clear performance window too!
         print("[OK] Cleared efficiency and performance tracking for recalculation")
         
-        # Reallocate hardware buffers if size changed OR mode changed (mode may require different datatype)
+        # Reallocate hardware buffers if size changed
         # Note: These are returned as part of the return tuple, caller must update globals
         new_buffer_0 = buffer_0
         new_buffer_1 = buffer_1
-        if buffer_size_changed or mode_changed:
-            # Get correct datatype for the new mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
-            _, numpy_dtype = get_datatype_for_mode(new_mode)
-            new_buffer_0 = np.zeros(new_buffer_size, dtype=numpy_dtype)
-            new_buffer_1 = np.zeros(new_buffer_size, dtype=numpy_dtype)
-            dtype_name = "INT16" if numpy_dtype == np.int16 else "INT8"
-            print(f"[OK] Hardware buffers reallocated: {new_buffer_size:,} samples (dtype: {dtype_name})")
+        if buffer_size_changed:
+            new_buffer_0 = np.zeros(new_buffer_size, dtype=np.int8)  # Assuming INT8_T
+            new_buffer_1 = np.zeros(new_buffer_size, dtype=np.int8)
+            print(f"[OK] Hardware buffers reallocated: {new_buffer_size:,} samples")
         
         # Reallocate ring buffer if size changed OR if settings changed (to clear old data)
         # Always reset ring buffer when restarting to ensure clean state with new settings
@@ -600,37 +585,9 @@ def apply_streaming_restart(settings, scope, buffer_0, buffer_1, data_lock,
             print("[CHANNEL] Channel settings applied successfully")
         
         # Re-register buffers with new settings
-        # Get correct datatype for the mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
-        adc_data_type, _ = get_datatype_for_mode(new_mode)
-        dtype_name = "INT16_T" if adc_data_type == psdk.DATA_TYPE.INT16_T else "INT8_T"
-        
-        # Check if datatype changed (which would mean ADC limits changed)
-        current_datatype, _ = get_datatype_for_mode(current_mode)
-        datatype_changed = (adc_data_type != current_datatype)
-        
-        # Update ADC limits and Y-axis if datatype changed (ADC limits are datatype-dependent)
-        if datatype_changed:
-            # Update scope's ADC limits for the new datatype (updates internal state)
-            print(f"[ADC LIMITS] Datatype changed: updating ADC limits for {dtype_name}")
-            min_adc, max_adc = scope.get_adc_limits(datatype=adc_data_type)
-            print(f"[ADC LIMITS] Hardware returned ADC limits: {min_adc} to {max_adc} (datatype: {dtype_name})")
-            
-            # Update plot Y-axis to match new ADC limits (only if plot is provided)
-            # Use QTimer to defer the update slightly to ensure it happens after all operations
-            if plot is not None:
-                if QT_AVAILABLE:
-                    # Defer the Y-axis update to ensure it happens after streaming restart
-                    QtCore.QTimer.singleShot(100, lambda: data_processing.update_y_axis_from_adc_limits(plot, scope, datatype=adc_data_type))
-                else:
-                    # Fallback if Qt is not available (shouldn't happen, but just in case)
-                    data_processing.update_y_axis_from_adc_limits(plot, scope, datatype=adc_data_type)
-                print(f"[ADC LIMITS] Plot Y-axis update scheduled for {dtype_name} datatype")
-            else:
-                print(f"[WARNING] Plot not provided - Y-axis not updated (datatype: {dtype_name})")
-        
-        print(f"Re-registering buffers with ratio={new_ratio}, mode={new_mode}, datatype={dtype_name}")
+        print(f"Re-registering buffers with ratio={new_ratio}, mode={new_mode}")
         register_double_buffers(scope, new_buffer_0, new_buffer_1, new_buffer_size, 
-                               adc_data_type, new_mode)
+                               psdk.DATA_TYPE.INT8_T, new_mode)
         
         # Apply trigger configuration before restarting streaming
         trigger_enabled = settings.get('new_trigger_enabled', settings.get('current_trigger_enabled', False))
@@ -710,11 +667,8 @@ def apply_streaming_restart(settings, scope, buffer_0, buffer_1, data_lock,
             stop_hardware_streaming(scope)
             time.sleep(0.5)
             clear_hardware_buffers(scope)
-            # Get correct datatype for the previous mode being restored
-            restore_mode = settings.get('current_mode', new_mode)
-            restore_datatype, _ = get_datatype_for_mode(restore_mode)
             register_double_buffers(scope, new_buffer_0, new_buffer_1, old_buffer_size, 
-                                   restore_datatype, restore_mode)
+                                   psdk.DATA_TYPE.INT8_T, settings.get('current_mode', new_mode))
             # Use current trigger state for error recovery
             recovery_trigger_enabled = settings.get('current_trigger_enabled', settings.get('new_trigger_enabled', False))
             start_hardware_streaming(scope, settings.get('current_interval', new_interval), 
@@ -772,12 +726,10 @@ def restart_streaming(scope, buffer_0, buffer_1, data_array, ring_head, ring_fil
     ring_filled = 0
     data_array.fill(0)
     
-    # Re-register hardware buffers with correct datatype for the mode
-    adc_data_type, _ = get_datatype_for_mode(downsampling_mode)
-    dtype_name = "INT16_T" if adc_data_type == psdk.DATA_TYPE.INT16_T else "INT8_T"
-    print(f"Re-registering buffers with ratio={downsampling_ratio}, mode={downsampling_mode}, datatype={dtype_name}")
+    # Re-register hardware buffers
+    print(f"Re-registering buffers with ratio={downsampling_ratio}, mode={downsampling_mode}")
     register_double_buffers(scope, buffer_0, buffer_1, len(buffer_0), 
-                           adc_data_type, downsampling_mode)
+                           psdk.DATA_TYPE.INT8_T, downsampling_mode)
     
     # Restart hardware streaming
     try:

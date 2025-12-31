@@ -32,7 +32,7 @@ scope = psdk.ps6000a()
 scope.open_unit(resolution="12bit")
 
 # Enable channel A with +/- 500mV range (1V total dynamic range)
-scope.set_channel(channel=psdk.CHANNEL.A, coupling=psdk.COUPLING.DC, range=psdk.RANGE.mV500)
+scope.set_channel(channel=psdk.CHANNEL.A, coupling=psdk.COUPLING.DC_50OHM, range=psdk.RANGE.mV500)
 
 # Configure a simple rising edge trigger for channel A, wait indefinitely (do not auto trigger)
 scope.set_simple_trigger(channel=psdk.CHANNEL.A, threshold=200,

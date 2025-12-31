@@ -18,26 +18,28 @@ from matplotlib import pyplot as plt
 import pypicosdk as psdk
 
 # Create a local variable to hold number of samples for use in later functions
-SAMPLES = 5_000
+SAMPLES = 1000000000
 
 # Create "scope" class and initialize PicoScope
 scope = psdk.ps6000a()
-scope.open_unit()
+scope.open_unit(resolution=psdk.RESOLUTION._8BIT)
 
 # Print the returned serial number of the initialized instrument
 print(scope.get_unit_serial())
 
 # Set siggen to 1MHz & 0.8Vpkpk output sine wave
-scope.set_siggen(frequency=10_000, pk2pk=1.8, wave_type=psdk.WAVEFORM.SINE)
+scope.set_siggen(frequency=1_000_000, pk2pk=1.8, wave_type=psdk.WAVEFORM.SQUARE)
 
 # Enable channel A with +/- 1V range (2V total dynamic range)
-scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.V1)
+scope.set_channel(channel=psdk.CHANNEL.A, range=psdk.RANGE.mV500, coupling=psdk.COUPLING.DC_50OHM)
+#scope.set_channel(channel=psdk.CHANNEL.C, range=psdk.RANGE.mV500, coupling=psdk.COUPLING.DC_50OHM)
+#scope.set_aux_io_mode(mode=psdk.AUXIO_MODE.HIGH_OUT)
 
 # Configure a simple rising edge trigger for channel A, wait indefinitely (do not auto trigger)
 scope.set_simple_trigger(channel=psdk.CHANNEL.A, threshold=0, auto_trigger=0)
 
 # Helper function to set timebase of scope via requested sample rate
-TIMEBASE = scope.sample_rate_to_timebase(sample_rate=50, unit=psdk.SAMPLE_RATE.MSPS)
+TIMEBASE = scope.sample_rate_to_timebase(sample_rate=10, unit=psdk.SAMPLE_RATE.GSPS)
 
 # Unused alternate methods to set sample rate / interval
 # TIMEBASE = 2                                      # direct driver timebase
@@ -50,12 +52,14 @@ print(scope.get_actual_sample_rate())
 channel_buffer, time_axis = scope.run_simple_block_capture(TIMEBASE, SAMPLES)
 
 # time_base, unit = scope.get_time_axis(...)
-
+triggered = scope.get_trigger_info(0,1)
+print(triggered)
 # Release the device from the driver
 scope.close_unit()
 
 # Use matplotlib to setup the graph and plot the data
 plt.plot(time_axis, channel_buffer[psdk.CHANNEL.A])
+#plt.plot(time_axis, channel_buffer[psdk.CHANNEL.C])
 plt.xlabel("Time (ns)")
 plt.ylabel("Amplitude (mV)")
 plt.grid(True)

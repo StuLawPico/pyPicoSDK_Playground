@@ -413,17 +413,14 @@ def update_y_axis_from_adc_limits(plot, scope, datatype=None):
     
     vb = plot.getViewBox()
     
-    # Disable auto-range for Y-axis (critical for maintaining fixed range)
-    plot.enableAutoRange(x=False, y=False)
-    
-    # Lock y-axis limits first to prevent auto-range from interfering
-    vb.setLimits(yMin=y_min, yMax=y_max)
-    
     # Set y-axis range with no padding (padding=0 ensures exact range)
     plot.setYRange(y_min, y_max, padding=0)
     
-    # Force the viewbox to update its range immediately
-    vb.enableAutoRange(enable=False)
+    # Lock y-axis limits to prevent auto-range or user interaction from changing it
+    # setLimits() ensures the view cannot go outside these bounds
+    vb.setLimits(yMin=y_min, yMax=y_max)
+    
+    # Note: Auto-range is already disabled at plot level with enableAutoRange(x=False, y=False)
 
 
 def enforce_y_axis_adc_limits(plot, scope, buffer_percent=0.05, datatype=None):
@@ -529,7 +526,6 @@ def calculate_raw_data_time_alignment(ring_filled, downsampling_ratio, trigger_a
     return raw_x_data, raw_end_pos, raw_start_pos
 
 
-def format_memory_size(bytes_value):
     """
     Format memory size in bytes to human-readable format.
     

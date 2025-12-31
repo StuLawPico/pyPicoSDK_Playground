@@ -131,29 +131,6 @@ def compute_interval_from_msps(msps: float):
     return interval_ms, psdk.TIME_UNIT.MS
 
 
-def get_datatype_for_mode(downsampling_mode):
-    """
-    Get the correct ADC data type for a given downsampling mode.
-    
-    Args:
-        downsampling_mode: Downsampling mode (psdk.RATIO_MODE.DECIMATE or psdk.RATIO_MODE.AVERAGE)
-    
-    Returns:
-        tuple: (data_type, numpy_dtype) where:
-            - data_type: psdk.DATA_TYPE constant (INT8_T or INT16_T)
-            - numpy_dtype: numpy dtype (np.int8 or np.int16)
-    
-    Note:
-        - DECIMATE mode supports INT8_T (faster, less memory)
-        - AVERAGE mode requires INT16_T (hardware limitation)
-    """
-    if downsampling_mode == psdk.RATIO_MODE.AVERAGE:
-        return psdk.DATA_TYPE.INT16_T, np.int16
-    else:
-        # DECIMATE and other modes can use INT8_T
-        return psdk.DATA_TYPE.INT8_T, np.int8
-
-
 def register_double_buffers(scope, buffer_0, buffer_1, samples_per_buffer, adc_data_type, downsampling_mode):
     """
     Register both hardware buffers (buffer_0 and buffer_1) with the scope.
@@ -537,15 +514,9 @@ def pull_raw_samples_from_device(scope, total_raw_samples, adc_data_type):
     # Stop scope and enable trigger within pre-trigger samples
     scope.stop()
     
-    # Create buffer for raw data with correct datatype
-    # Determine numpy dtype from PicoSDK datatype
-    if adc_data_type == psdk.DATA_TYPE.INT16_T:
-        numpy_dtype = np.int16
-    else:  # Default to INT8_T
-        numpy_dtype = np.int8
-    
+    # Create buffer for raw data
     try:
-        raw_buffer = np.zeros(total_raw_samples, dtype=numpy_dtype)
+        raw_buffer = np.zeros(total_raw_samples, dtype=np.int8)  # Assuming INT8_T
     except (MemoryError, ValueError) as e:
         error_msg = f"[ERROR] Failed to allocate buffer for {total_raw_samples:,} samples: {e}"
         print(error_msg)
@@ -592,8 +563,7 @@ def pull_raw_samples_from_device(scope, total_raw_samples, adc_data_type):
         print(f"[DEBUG] This suggests the device may have limited data available")
     
     # Extract raw data from buffer (get_values fills the buffer we registered)
-    # Convert to float32 for plotting (preserves the actual ADC count values)
-    raw_data = raw_buffer[:n_raw_samples].astype(np.float32)
+    raw_data = raw_buffer[:n_raw_samples]  # Keep as np.int8, no conversion needed
     
     return raw_data, n_raw_samples
 

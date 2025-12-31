@@ -49,7 +49,7 @@ from hardware_helpers import (
     stop_hardware_streaming, clear_hardware_buffers,
     compute_interval_from_msps, configure_default_trigger, apply_trigger_configuration,
     calculate_optimal_buffer_size, validate_buffer_size, time_to_samples,
-    TIME_UNIT_NAMES, TIME_UNIT_TO_SECONDS, get_datatype_for_mode,
+    TIME_UNIT_NAMES, TIME_UNIT_TO_SECONDS,
     pull_raw_samples_from_device, get_trigger_position_from_device
 )
 import data_processing
@@ -281,16 +281,13 @@ print("\nSetting up double buffers...")
 # Clear any existing buffers
 scope.set_data_buffer(psdk.CHANNEL.A, 0, action=psdk.ACTION.CLEAR_ALL)
 
-# Create buffers with correct datatype for the mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
-adc_data_type, numpy_dtype = get_datatype_for_mode(INITIAL_CONFIG['downsampling_mode'])
-dtype_name = "INT16_T" if adc_data_type == psdk.DATA_TYPE.INT16_T else "INT8_T"
-print(f"Creating buffers with datatype: {dtype_name} (mode: {'AVERAGE' if INITIAL_CONFIG['downsampling_mode'] == psdk.RATIO_MODE.AVERAGE else 'DECIMATE'})")
-buffer_0 = np.zeros(INITIAL_CONFIG['samples_per_buffer'], dtype=numpy_dtype)
-buffer_1 = np.zeros(INITIAL_CONFIG['samples_per_buffer'], dtype=numpy_dtype)
+# Create buffers
+buffer_0 = np.zeros(INITIAL_CONFIG['samples_per_buffer'], dtype=INITIAL_CONFIG['adc_numpy_type'])
+buffer_1 = np.zeros(INITIAL_CONFIG['samples_per_buffer'], dtype=INITIAL_CONFIG['adc_numpy_type'])
 
 # Register buffers with hardware (downsampled mode)
 print("Registering double buffers...")
-register_double_buffers(scope, buffer_0, buffer_1, INITIAL_CONFIG['samples_per_buffer'], adc_data_type, INITIAL_CONFIG['downsampling_mode'])
+register_double_buffers(scope, buffer_0, buffer_1, INITIAL_CONFIG['samples_per_buffer'], INITIAL_CONFIG['adc_data_type'], INITIAL_CONFIG['downsampling_mode'])
 print("[OK] Double buffer setup complete")
 
 # ============================================================================
@@ -1018,11 +1015,8 @@ def on_stop_button_clicked():
 
                 # Re-register streaming buffers (device needs to be back in streaming mode)
                 # This is critical: after get_values() in RAW mode, we must re-register streaming buffers
-                # Get correct datatype for current mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
-                current_adc_data_type, _ = get_datatype_for_mode(DOWNSAMPLING_MODE)
-                dtype_name = "INT16_T" if current_adc_data_type == psdk.DATA_TYPE.INT16_T else "INT8_T"
-                print(f"[RESTART] Re-registering streaming buffers ({SAMPLES_PER_BUFFER:,} samples, {DOWNSAMPLING_MODE} mode, datatype={dtype_name})...")
-                register_double_buffers(scope, buffer_0, buffer_1, SAMPLES_PER_BUFFER, current_adc_data_type, DOWNSAMPLING_MODE)
+                print(f"[RESTART] Re-registering streaming buffers ({SAMPLES_PER_BUFFER:,} samples, {DOWNSAMPLING_MODE} mode)...")
+                register_double_buffers(scope, buffer_0, buffer_1, SAMPLES_PER_BUFFER, ADC_DATA_TYPE, DOWNSAMPLING_MODE)
 
                 # Configure trigger as disabled
                 configure_default_trigger(scope, TRIGGER_ENABLED, TRIGGER_THRESHOLD_ADC, TRIGGER_DIRECTION)
@@ -1127,10 +1121,7 @@ plot.setLabel('bottom', 'Time', units='s')
 plot.showGrid(x=True, y=True, alpha=0.3)
 
 # Setup plot optimizations using helper function
-# Use the correct datatype for the initial mode (not the hardcoded ADC_DATA_TYPE constant)
-# This ensures Y-axis is set correctly for AVERAGE mode (INT16_T) vs DECIMATE mode (INT8_T)
-initial_adc_data_type, _ = get_datatype_for_mode(INITIAL_CONFIG['downsampling_mode'])
-data_processing.setup_plot_optimizations(plot, TARGET_TIME_WINDOW, hardware_adc_sample_rate, scope=scope, datatype=initial_adc_data_type)
+data_processing.setup_plot_optimizations(plot, TARGET_TIME_WINDOW, hardware_adc_sample_rate, scope=scope, datatype=ADC_DATA_TYPE)
 
 # Create plot curves using helper functions
 curve = data_processing.create_plot_curve(plot, ANTIALIAS)
@@ -1500,12 +1491,10 @@ def streaming_thread(hardware_adc_rate):
                 continue
 
             # Poll hardware for accumulated samples (downsampled mode)
-            # Get correct datatype for current mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
-            current_adc_data_type, _ = get_datatype_for_mode(DOWNSAMPLING_MODE)
             info = scope.get_streaming_latest_values(
                 channel=psdk.CHANNEL.A,
                 ratio_mode=DOWNSAMPLING_MODE,
-                data_type=current_adc_data_type
+                data_type=ADC_DATA_TYPE
             )
 
             n_samples = info['no of samples']
@@ -1681,10 +1670,8 @@ def streaming_thread(hardware_adc_rate):
                     new_buffer = buffer_0 if new_buffer_index == 0 else buffer_1
 
                     # Re-register buffer (single buffer for switching)
-                    # Get correct datatype for current mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
-                    current_adc_data_type, _ = get_datatype_for_mode(DOWNSAMPLING_MODE)
                     scope.set_data_buffer(psdk.CHANNEL.A, SAMPLES_PER_BUFFER, buffer=new_buffer,
-                                        action=psdk.ACTION.ADD, datatype=current_adc_data_type, ratio_mode=DOWNSAMPLING_MODE)
+                                        action=psdk.ACTION.ADD, datatype=ADC_DATA_TYPE, ratio_mode=DOWNSAMPLING_MODE)
 
             time.sleep(POLLING_INTERVAL)
 
@@ -1695,11 +1682,9 @@ def streaming_thread(hardware_adc_rate):
     # Handle streaming stopped by user (Option A: Clean Stop - drain buffers)
     if streaming_stopped:
         # Use centralized buffer draining function
-        # Get correct datatype for current mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
-        current_adc_data_type, _ = get_datatype_for_mode(DOWNSAMPLING_MODE)
         total_drained, ring_head, ring_filled = drain_remaining_buffers(
             scope, buffer_0, buffer_1, data_array, ring_head, ring_filled,
-            PYTHON_RING_BUFFER, data_lock, plot_signal, DOWNSAMPLING_MODE, current_adc_data_type
+            PYTHON_RING_BUFFER, data_lock, plot_signal, DOWNSAMPLING_MODE, ADC_DATA_TYPE
         )
         # Note: ring_head and ring_filled are updated from return values
 
@@ -1905,9 +1890,7 @@ def on_pull_raw_samples_clicked():
         print(f"[RAW SAMPLES] Reading {total_raw_samples:,} raw samples (pre={MAX_PRE_TRIGGER_SAMPLES:,} + post={MAX_POST_TRIGGER_SAMPLES:,}, no downsampling)")
 
         # Pull raw samples from device using helper function
-        # Get correct datatype for current mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
-        current_adc_data_type, _ = get_datatype_for_mode(DOWNSAMPLING_MODE)
-        raw_data, n_raw_samples = pull_raw_samples_from_device(scope, total_raw_samples, current_adc_data_type)
+        raw_data, n_raw_samples = pull_raw_samples_from_device(scope, total_raw_samples, ADC_DATA_TYPE)
 
         # DEBUG: Check handle validity AFTER raw pull (after get_values call)
         try:
