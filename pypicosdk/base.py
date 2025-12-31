@@ -66,7 +66,7 @@ class PicoScopeBase:
         self.min_adc_value = None
         self.over_range = 0
         self._actual_interval = 0
-        self.last_used_volt_unit: str = 'mv'
+        self.last_used_volt_unit: str = 'adc'
 
         self.base_dataclass = _general.BaseDataClass()
 
@@ -285,17 +285,30 @@ class PicoScopeBase:
         Returns:
             str: Returns data from device.
         """
-        string = ctypes.create_string_buffer(16)
-        string_length = ctypes.c_int16(32)
-        required_size = ctypes.c_int16(32)
+        # First call to query required buffer size for the info string
+        required_size = ctypes.c_int16()
         status = self._call_attr_function(
             'GetUnitInfo',
             self.handle,
-            string,
+            None,                # No buffer yet, just request the size
+            None,
+            ctypes.byref(required_size),
+            ctypes.c_uint32(unit_info)
+        )
+        # Create string buffer of needed size
+        string = ctypes.create_string_buffer(required_size.value)
+        string_length = required_size.value
+
+        # Second call to retrieve info string into buffer
+        status = self._call_attr_function(
+            'GetUnitInfo',
+            self.handle,
+            string,              # Pass buffer for result
             string_length,
             ctypes.byref(required_size),
             ctypes.c_uint32(unit_info)
         )
+        # Return decoded string from buffer
         return string.value.decode()
 
     def get_unit_serial(self) -> str:
@@ -678,6 +691,7 @@ class PicoScopeBase:
         to_segment_index: int,
         down_sample_ratio: int,
         down_sample_ratio_mode: int,
+        wait_for_ready: bool = True,
     ) -> tuple[int, list[list[str]]]:
         """Retrieve data from multiple memory segments.
 
@@ -690,6 +704,7 @@ class PicoScopeBase:
             down_sample_ratio: Downsampling ratio to apply before copying.
             down_sample_ratio_mode: Downsampling mode from
                 :class:`RATIO_MODE`.
+            wait_for_ready (bool, optional): Whether to wait for the device to be ready.
 
         Returns:
             tuple[int, list[list[str]]]: ``(samples, overflow)list)`` where ``samples`` is the
@@ -697,7 +712,10 @@ class PicoScopeBase:
             channnels have exceeded their voltage range.
         """
 
-        self.is_ready()
+        # If wait_for_ready is True, wait for the device to be ready before getting values
+        if wait_for_ready:
+            self.is_ready()
+            
         no_samples = ctypes.c_uint64(no_of_samples)
         overflow = np.zeros(to_segment_index + 1, dtype=np.int16)
         self._call_attr_function(
@@ -726,6 +744,7 @@ class PicoScopeBase:
         from_segment_index: int,
         to_segment_index: int,
         overflow: ctypes.c_int16,
+        wait_for_ready: bool = True,
     ) -> int:
         """Retrieve overlapped data from multiple segments for block or rapid block mode.
 
@@ -747,6 +766,7 @@ class PicoScopeBase:
             to_segment_index: Last segment index to read.
             overflow: ``ctypes.c_int16`` instance that receives any overflow
                 flags.
+            wait_for_ready (bool, optional): Whether to wait for the device to be ready.
 
         Returns:
             int: Actual number of samples copied from each segment.
@@ -766,7 +786,10 @@ class PicoScopeBase:
             (1024, 0)
         """
 
-        self.is_ready()
+        # If wait_for_ready is True, wait for the device to be ready before getting values
+        if wait_for_ready:
+            self.is_ready()
+
         c_samples = ctypes.c_uint64(no_of_samples)
         self._call_attr_function(
             "GetValuesOverlapped",
@@ -795,9 +818,8 @@ class PicoScopeBase:
             self.handle,
             ctypes.byref(resolution),
         )
-        self.resolution = RESOLUTION(resolution.value)
-        self.min_adc_value, self.max_adc_value = self.get_adc_limits()
-        return RESOLUTION(resolution.value)
+        self.resolution = resolution.value
+        return resolution.value
 
     def no_of_streaming_values(self) -> int:
         """Return the number of values currently available while streaming."""
@@ -1014,7 +1036,7 @@ class PicoScopeBase:
         Ideal for pyplot ylim function.
 
         Args:
-            unit (str | None, optional): Overwrite the ylim unit using `'mv'` or `'v'`.
+            unit (str | None, optional): Overwrite the ylim unit using `'mv'`, `'v'` or `'adc'`.
                 If None, The unit will be taken from the last voltage unit conversion.
 
         Returns:
@@ -1039,6 +1061,8 @@ class PicoScopeBase:
             return self.channel_db[largest_range_index].ylim_mv
         elif unit == 'v':
             return self.channel_db[largest_range_index].ylim_v
+        elif unit == 'adc':
+            return (self.min_adc_value, self.max_adc_value)
 
     def set_device_resolution(self, resolution: RESOLUTION) -> None:
         """Configure the ADC resolution using ``ps6000aSetDeviceResolution``.
@@ -1052,7 +1076,7 @@ class PicoScopeBase:
             resolution,
         )
         self.resolution = resolution
-        self.min_adc_value, self.max_adc_value = self.get_adc_limits()
+        self.get_adc_limits()
 
     def _set_channel_on(self, channel, range, probe_scale):
         # Constrain probe scale
@@ -1558,16 +1582,9 @@ class PicoScopeBase:
         elif buffer is not None:
             buf_ptr = npc.as_ctypes(buffer)
         else:
-            # Map to NumPy dtype
-            dtype_map = {
-                DATA_TYPE.INT8_T: np.int8,
-                DATA_TYPE.INT16_T: np.int16,
-                DATA_TYPE.INT32_T: np.int32,
-                DATA_TYPE.INT64_T: np.int64,
-                DATA_TYPE.UINT32_T: np.uint32,
-            }
-
-            np_dtype = dtype_map.get(datatype)
+            # Map to NumPy dtype and update ADC limits
+            self.get_adc_limits(datatype)
+            np_dtype = cst.DataTypeNPMap.get(datatype, None)
             if np_dtype is None:
                 raise PicoSDKException("Invalid datatype selected for buffer")
 
@@ -1620,16 +1637,9 @@ class PicoScopeBase:
             buffer = None
             buf_ptr = None
         else:
-            # Map to NumPy dtype
-            dtype_map = {
-                DATA_TYPE.INT8_T: np.int8,
-                DATA_TYPE.INT16_T: np.int16,
-                DATA_TYPE.INT32_T: np.int32,
-                DATA_TYPE.INT64_T: np.int64,
-                DATA_TYPE.UINT32_T: np.uint32,
-            }
-
-            np_dtype = dtype_map.get(datatype)
+            # Map to NumPy dtype and update ADC limits
+            self.get_adc_limits(datatype)
+            np_dtype = cst.DataTypeNPMap.get(datatype, None)
             if np_dtype is None:
                 raise PicoSDKException("Invalid datatype selected for buffer")
 
@@ -1659,7 +1669,7 @@ class PicoScopeBase:
         ratio_mode=RATIO_MODE.AGGREGATE,
         action=ACTION.CLEAR_ALL | ACTION.ADD,
         buffers:list[np.ndarray, np.ndarray] | np.ndarray | None = None,
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> np.ndarray:
         """
         Allocate and assign max and min NumPy-backed data buffers.
 
@@ -1675,7 +1685,7 @@ class PicoScopeBase:
                 creates its own buffers.
 
         Returns:
-            tuple[np.ndarray, np.ndarray]: Tuple of (buffer_min, buffer_max) NumPy arrays.
+            np.ndarray: NumPy array of buffers.
 
         Raises:
             PicoSDKException: If an unsupported data type is provided.
@@ -1684,21 +1694,16 @@ class PicoScopeBase:
             buffer_min = buffers[0]
             buffer_max = buffers[1]
         else:
-            # Map to NumPy dtype
-            dtype_map = {
-                DATA_TYPE.INT8_T: np.int8,
-                DATA_TYPE.INT16_T: np.int16,
-                DATA_TYPE.INT32_T: np.int32,
-                DATA_TYPE.INT64_T: np.int64,
-                DATA_TYPE.UINT32_T: np.uint32,
-            }
-
-            np_dtype = dtype_map.get(datatype)
+            # Map to NumPy dtype and update ADC limits
+            self.get_adc_limits(datatype)
+            np_dtype = cst.DataTypeNPMap.get(datatype, None)
             if np_dtype is None:
                 raise PicoSDKException("Invalid datatype selected for buffer")
 
-            buffer_max = np.zeros(samples, dtype=np_dtype)
-            buffer_min = np.zeros(samples, dtype=np_dtype)
+            buffers = np.zeros((2, samples), dtype=np_dtype)
+
+        buffer_min = buffers[0]
+        buffer_max = buffers[1]
 
         buf_max_ptr = npc.as_ctypes(buffer_max)
         buf_min_ptr = npc.as_ctypes(buffer_min)
@@ -1716,7 +1721,7 @@ class PicoScopeBase:
             action,
         )
 
-        return buffer_min, buffer_max
+        return buffers
 
     def set_data_buffers_rapid_capture(
             self,
@@ -1751,16 +1756,9 @@ class PicoScopeBase:
             buffer = None
             buf_ptr = None
         else:
-            # Map to NumPy dtype
-            dtype_map = {
-                DATA_TYPE.INT8_T: np.int8,
-                DATA_TYPE.INT16_T: np.int16,
-                DATA_TYPE.INT32_T: np.int32,
-                DATA_TYPE.INT64_T: np.int64,
-                DATA_TYPE.UINT32_T: np.uint32,
-            }
-
-            np_dtype = dtype_map.get(datatype)
+            # Map to NumPy dtype and update ADC limits
+            self.get_adc_limits(datatype)
+            np_dtype = cst.DataTypeNPMap.get(datatype, None)
             if np_dtype is None:
                 raise PicoSDKException("Invalid datatype selected for buffer")
 
@@ -2027,7 +2025,16 @@ class PicoScopeBase:
         )
         return count.value, serials.value.decode(), serial_length.value
 
-    def get_values(self, samples, start_index=0, segment=0, ratio=0, ratio_mode=RATIO_MODE.RAW) -> int:
+    def get_values(
+        self,
+        samples,
+        start_index: int =0,
+        segment: int = 0,
+        ratio: int = 0,
+        ratio_mode: RATIO_MODE = RATIO_MODE.RAW,
+        data_type: DATA_TYPE = DATA_TYPE.INT16_T,
+        wait_for_ready: bool = True,
+    ) -> int:
         """
         Retrieves a block of captured samples from the device once it's ready.
         If a channel goes over-range a warning will appear.
@@ -2041,14 +2048,21 @@ class PicoScopeBase:
                 segment (int, optional): Memory segment index to retrieve data from.
                 ratio (int, optional): Downsampling ratio.
                 ratio_mode (RATIO_MODE, optional): Ratio mode for downsampling.
+                wait_for_ready (bool, optional): Whether to wait for the device to be ready.
 
         Returns:
                 int: Actual number of samples retrieved.
         """
 
-        self.is_ready()
+        # If wait_for_ready is True, wait for the device to be ready before getting values
+        if wait_for_ready:
+            self.is_ready()
+
+        # Create ctypes for total samples and over range
         total_samples = ctypes.c_uint32(samples)
         over_range = ctypes.c_int16()
+
+        # Call the GetValues function
         self._call_attr_function(
             'GetValues',
             self.handle,
@@ -2059,8 +2073,12 @@ class PicoScopeBase:
             segment,
             ctypes.byref(over_range)
         )
+
+        # Verify if any channels are over range
         self.over_range = over_range.value
         self.is_over_range()
+
+        # Return the number of samples retrieved
         return total_samples.value
 
     def get_streaming_latest_values(
