@@ -440,9 +440,8 @@ def apply_time_window(settings, settings_changed, performance_changed,
             # Y-axis remains fixed (ADC counts), selection window unaffected
             plot.setXRange(0, new_time_window * hardware_adc_sample_rate, padding=0)
             print(f"[SETTINGS] X-axis range updated: 0 to {new_time_window * hardware_adc_sample_rate:.0f} samples")
-            # Update Y-axis to exact ADC limits (keeps it fixed regardless of settings changes)
-            if scope is not None:
-                data_processing.update_y_axis_from_adc_limits(plot, scope)
+            # Note: Y-axis limits are set once during initialization and don't need to be updated
+            # ADC limits are hardware-dependent and don't change during runtime
             # Update display window label
             plot_signal.buffer_status_updated.emit(0, python_ring_buffer)
         else:
@@ -655,9 +654,8 @@ def apply_streaming_restart(settings, scope, buffer_0, buffer_1, data_lock,
             f"Real-time Streaming Data - {new_ratio}:1 {mode_combo.currentText()}"
         )
         
-        # Update Y-axis to exact ADC limits (keeps it fixed regardless of settings changes)
-        if plot is not None and scope is not None:
-            data_processing.update_y_axis_from_adc_limits(plot, scope)
+        # Note: Y-axis limits are set once during initialization and don't need to be updated
+        # ADC limits are hardware-dependent and don't change during runtime
         
         return True, new_rate, new_ring_buffer, data_array, x_data, ring_head, ring_filled, new_buffer_0, new_buffer_1
         

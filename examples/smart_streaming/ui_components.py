@@ -1720,8 +1720,9 @@ def build_control_panel(config):
     ]
     for label, value in coupling_options:
         channel_coupling_combo.addItem(label, value)
-    # Set default to AC (current default in main script)
-    default_coupling_idx = next((i for i, (_, val) in enumerate(coupling_options) if val == psdk.COUPLING.AC), 0)
+    # Set default to match INITIAL_CONFIG['channel_coupling'] from main script
+    default_coupling = config.get('channel_coupling', psdk.COUPLING.AC)
+    default_coupling_idx = next((i for i, (_, val) in enumerate(coupling_options) if val == default_coupling), 0)
     channel_coupling_combo.setCurrentIndex(default_coupling_idx)
     channel_coupling_combo.setToolTip('Coupling mode for channel A (AC, DC, or DC 50Ω)')
     channel_coupling_row.addWidget(channel_coupling_combo)

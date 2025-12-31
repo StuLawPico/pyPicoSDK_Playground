@@ -349,7 +349,7 @@ def create_raw_data_curve(plot, antialias=False, downsample_mode='subsample'):
     return raw_curve
 
 
-def setup_plot_optimizations(plot, target_time_window, hardware_adc_sample_rate, scope=None):
+def setup_plot_optimizations(plot, target_time_window, hardware_adc_sample_rate, scope=None, datatype=None):
     """
     Configure plot optimizations for real-time streaming.
     
@@ -358,7 +358,9 @@ def setup_plot_optimizations(plot, target_time_window, hardware_adc_sample_rate,
         target_time_window: Target time window in seconds
         hardware_adc_sample_rate: Hardware ADC sample rate
         scope: Optional PicoScope object to get ADC limits from. If provided,
-               y-axis will be constrained to ADC limits with buffer.
+               y-axis will be constrained to ADC limits.
+        datatype: Optional DATA_TYPE enum (e.g., psdk.DATA_TYPE.INT8_T).
+                  If None, uses the last datatype set on the scope.
     """
     # Lock Y interactions; allow X-only mouse pan/zoom via ViewBox
     vb = plot.getViewBox()
@@ -372,7 +374,7 @@ def setup_plot_optimizations(plot, target_time_window, hardware_adc_sample_rate,
     
     # Set y-axis range based on ADC limits if scope is provided
     if scope is not None:
-        update_y_axis_from_adc_limits(plot, scope)
+        update_y_axis_from_adc_limits(plot, scope, datatype=datatype)
     else:
         # Fallback to default range if scope not provided
         plot.setYRange(-150, 150, padding=0)
@@ -385,27 +387,29 @@ def setup_plot_optimizations(plot, target_time_window, hardware_adc_sample_rate,
     # Y-axis constraints are locked via setLimits() above
 
 
-def update_y_axis_from_adc_limits(plot, scope):
+def update_y_axis_from_adc_limits(plot, scope, datatype=None):
     """
-    Update y-axis range to fixed ADC limits.
+    Update y-axis range to fixed ADC limits from the scope.
     
-    TODO: When wrapper bug is fixed, use scope.get_adc_limits() to get actual ADC limits.
-    Currently get_adc_limits() returns invalid values (32-bit values, one unsigned) and is broken.
-    Bug logged with wrapper developer.
-    
-    For now, using fixed range of -130 to +130 which covers 8-bit signed range (-128 to +127)
-    with small margin for visibility.
+    Uses scope.get_adc_limits() to get the actual ADC limits based on the device
+    resolution and data type. Adds a small margin for visibility.
     
     Args:
         plot: PyQtGraph plot widget
-        scope: PicoScope object (not currently used due to wrapper bug, but kept for future use)
+        scope: PicoScope object to get ADC limits from
+        datatype: Optional DATA_TYPE enum (e.g., psdk.DATA_TYPE.INT8_T). 
+                  If None, uses the last datatype set on the scope.
     """
-    # TODO: Replace with scope.get_adc_limits() when wrapper bug is fixed
-    # Expected: -128 to +127 for 8-bit signed (256 levels)
-    # Currently broken: returns 32-bit values, one unsigned - completely invalid
+    # Get ADC limits from scope
+    min_adc, max_adc = scope.get_adc_limits(datatype=datatype)
     
-    y_min = -130.0
-    y_max = 130.0
+    # Add small margin for visibility (2 counts on each side)
+    margin = 2.0
+    y_min = float(min_adc) - margin
+    y_max = float(max_adc) + margin
+    
+    print(f"[PLOT] ADC limits from scope: {min_adc} to {max_adc} (datatype: {datatype})")
+    print(f"[PLOT] Y-axis set to: {y_min} to {y_max} ADC counts (with {margin} count margin)")
     
     vb = plot.getViewBox()
     
@@ -417,11 +421,9 @@ def update_y_axis_from_adc_limits(plot, scope):
     vb.setLimits(yMin=y_min, yMax=y_max)
     
     # Note: Auto-range is already disabled at plot level with enableAutoRange(x=False, y=False)
-    
-    print(f"[PLOT] Y-axis fixed to: {y_min} to {y_max} ADC counts (temporary until wrapper bug fixed)")
 
 
-def enforce_y_axis_adc_limits(plot, scope, buffer_percent=0.05):
+def enforce_y_axis_adc_limits(plot, scope, buffer_percent=0.05, datatype=None):
     """
     Enforce y-axis constraints based on ADC limits from scope.
     Call this after any autoRange() operations to maintain y-axis constraints.
@@ -432,9 +434,11 @@ def enforce_y_axis_adc_limits(plot, scope, buffer_percent=0.05):
         plot: PyQtGraph plot widget
         scope: PicoScope object to get ADC limits from
         buffer_percent: Deprecated - kept for compatibility but not used (exact limits used instead)
+        datatype: Optional DATA_TYPE enum (e.g., psdk.DATA_TYPE.INT8_T).
+                  If None, uses the last datatype set on the scope.
     """
     # Use the same function as setup to ensure consistency
-    update_y_axis_from_adc_limits(plot, scope)
+    update_y_axis_from_adc_limits(plot, scope, datatype=datatype)
 
 
 @njit

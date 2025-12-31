@@ -102,7 +102,7 @@ INITIAL_CONFIG = {
     
     # Channel Configuration
     'channel_range': psdk.RANGE.mV500,
-    'channel_coupling': psdk.COUPLING.AC,
+    'channel_coupling': psdk.COUPLING.DC_50OHM,
     'channel_probe_scale': 1.0,
     
     # Signal Generator Configuration
@@ -210,8 +210,8 @@ TRIGGER_EVENT_COUNT = 0  # Counter for trigger events
 
 # Initialize PicoScope hardware
 print("Initializing PicoScope...")
-scope = psdk.psospa()
-#scope = psdk.ps6000a()
+#scope = psdk.psospa()
+scope = psdk.ps6000a()
 scope.open_unit(resolution=psdk.RESOLUTION._8BIT)
 print(f"Connected to: {scope.get_unit_serial()}")
 
@@ -1121,7 +1121,7 @@ plot.setLabel('bottom', 'Time', units='s')
 plot.showGrid(x=True, y=True, alpha=0.3)
 
 # Setup plot optimizations using helper function
-data_processing.setup_plot_optimizations(plot, TARGET_TIME_WINDOW, hardware_adc_sample_rate, scope=scope)
+data_processing.setup_plot_optimizations(plot, TARGET_TIME_WINDOW, hardware_adc_sample_rate, scope=scope, datatype=ADC_DATA_TYPE)
 
 # Create plot curves using helper functions
 curve = data_processing.create_plot_curve(plot, ANTIALIAS)
@@ -2018,9 +2018,8 @@ def on_pull_raw_samples_clicked():
             x_padding = (x_max - x_min) * 0.02  # 2% padding
             plot.setXRange(x_min - x_padding, x_max + x_padding, padding=0)
             print(f"[RAW SAMPLES] X-axis set to fit raw data: {x_min:.6f} to {x_max:.6f} seconds")
-        # Re-enforce Y-axis limits to ensure they stay fixed
-        data_processing.update_y_axis_from_adc_limits(plot, scope)
-        print(f"[RAW SAMPLES] Y-axis remains fixed at -130 to +130")
+        # Note: Y-axis limits are set once during initialization and don't need to be updated
+        # ADC limits are hardware-dependent and don't change during runtime
 
         # Disable full-pull button after pulling (can only pull once per trigger)
         # Enable region-based raw button now that we have cached raw data
