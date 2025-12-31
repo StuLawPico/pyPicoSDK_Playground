@@ -13,7 +13,7 @@
 ## 🏗️ Project Structure
 
 ```
-postBelgium/
+Smart_Streaming/
 ├── direct_streaming_plot_downsampled.py    # Main application (848 lines)
 ├── hardware_helpers.py                     # Hardware management (295 lines)
 ├── data_processing.py                       # Data processing & plotting (334 lines)
