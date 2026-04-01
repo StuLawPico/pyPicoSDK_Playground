@@ -14,15 +14,15 @@
 
 ```
 Smart_Streaming/
-├── direct_streaming_plot_downsampled.py    # Main application (848 lines)
-├── hardware_helpers.py                     # Hardware management (295 lines)
-├── data_processing.py                       # Data processing & plotting (334 lines)
-├── ui_helpers.py                           # UI management & coordination (502 lines)
-├── ui_components.py                        # UI widget creation (950 lines)
+├── direct_streaming_plot_downsampled.py    # Main application (2,323 lines)
+├── hardware_helpers.py                     # Hardware management (631 lines)
+├── data_processing.py                       # Data processing & plotting (546 lines)
+├── ui_helpers.py                           # UI management & coordination (904 lines)
+├── ui_components.py                        # UI widget creation (2,457 lines)
 └── ARCHITECTURE_OVERVIEW.md                # This documentation
 ```
 
-**Total Codebase:** ~2,929 lines (reduced from 1,484 lines in monolithic file)
+**Total Codebase:** ~6,861 lines (modular architecture with comprehensive functionality)
 
 ---
 
@@ -30,7 +30,7 @@ Smart_Streaming/
 
 ### 🎯 `direct_streaming_plot_downsampled.py` - Main Application
 **Purpose:** Central orchestrator and application entry point
-**Size:** 848 lines (43% reduction from original 1,484 lines)
+**Size:** 2,323 lines
 
 **Key Responsibilities:**
 - **Application Initialization:** Sets up PyQtGraph, hardware connection, and UI
@@ -63,7 +63,7 @@ def cleanup()                    # Resource cleanup
 
 ### 🔧 `hardware_helpers.py` - Hardware Management
 **Purpose:** All PicoScope hardware operations and calculations
-**Size:** 295 lines
+**Size:** 631 lines
 
 **Key Responsibilities:**
 - **Hardware Control:** Start/stop streaming, buffer management
@@ -75,19 +75,27 @@ def cleanup()                    # Resource cleanup
 **Core Functions:**
 ```python
 # Hardware Control
-def start_hardware_streaming(scope, sample_interval, time_units, ...)
 def stop_hardware_streaming(scope)
 def clear_hardware_buffers(scope)
 def register_double_buffers(scope, buffer_0, buffer_1, ...)
+# Note: Use scope.run_streaming() directly to start streaming
 
 # Calculations
 def calculate_sample_rate(interval, time_unit)
-def compute_interval_from_msps(msps)
 def calculate_optimal_buffer_size(max_memory, ratio)
+def time_to_samples(time_value, time_unit, sample_rate_hz)
+
+# Mode-Specific Datatype Handling
+def get_datatype_for_mode(downsampling_mode)
+    # Returns correct datatype: AVERAGE→INT16_T, DECIMATE→INT8_T
 
 # Trigger Management
 def configure_default_trigger(scope, enabled, threshold)
 def apply_trigger_configuration(scope, enabled, threshold)
+
+# Raw Data Operations
+def pull_raw_samples_from_device(scope, total_raw_samples, adc_data_type)
+def get_trigger_position_from_device(scope, trigger_at_sample, downsampling_ratio)
 
 # Validation
 def validate_buffer_size(buffer_size, ratio, max_memory)
@@ -101,7 +109,7 @@ def validate_buffer_size(buffer_size, ratio, max_memory)
 
 ### 📊 `data_processing.py` - Data Processing & Plotting
 **Purpose:** Real-time data processing, plotting, and performance monitoring
-**Size:** 334 lines
+**Size:** 546 lines
 
 **Key Responsibilities:**
 - **Plot Updates:** Efficient real-time plot rendering
@@ -115,16 +123,23 @@ def validate_buffer_size(buffer_size, ratio, max_memory)
 # Plot Management
 def update_plot(curve, data_array, ring_head, ring_filled, ...)
 def create_plot_curve(plot, antialias)
-def setup_plot_optimizations(plot, time_window, sample_rate)
+def create_raw_data_curve(plot, antialias, downsample_mode)
+def setup_plot_optimizations(plot, time_window, sample_rate, scope, datatype)
+
+# ADC Limits & Y-Axis Management
+def update_y_axis_from_adc_limits(plot, scope, datatype)
+def enforce_y_axis_adc_limits(plot, scope, buffer_percent, datatype)
 
 # Status Updates
-def update_buffer_status(current, total, ratio, sample_rate, displays)
-def update_efficiency_display(efficiency, jitter, status, displays)
 def calculate_efficiency_status(efficiency_history)
-
-# Performance Tracking
 def update_performance_tracking(perf_window, window_secs, n_samples)
+
+# Buffer Operations
 def drain_remaining_buffers(scope, buffer_0, buffer_1, ...)
+def calculate_raw_data_time_alignment(ring_filled, downsampling_ratio, ...)
+
+# Utilities
+def format_memory_size(bytes_value)
 ```
 
 **Dependencies:**
@@ -136,7 +151,7 @@ def drain_remaining_buffers(scope, buffer_0, buffer_1, ...)
 
 ### 🎨 `ui_helpers.py` - UI Management & Coordination
 **Purpose:** UI event handling, settings management, and user interaction coordination
-**Size:** 502 lines
+**Size:** 904 lines
 
 **Key Responsibilities:**
 - **Settings Collection:** Gather values from UI widgets
@@ -156,9 +171,10 @@ def validate_and_optimize_settings(settings, max_memory, ...)
 def apply_performance_settings(settings, timer)
 def apply_time_window(settings, settings_changed, ...)
 def apply_streaming_restart(settings, scope, buffer_0, ...)
+    # Handles mode changes, datatype changes, ADC limits updates
+def apply_channel_siggen_settings(settings, scope)
 
 # Streaming Control
-def restart_streaming(scope, buffer_0, buffer_1, ...)
 def update_max_post_trigger_range(buffer_size, spinbox)
 ```
 
@@ -171,7 +187,7 @@ def update_max_post_trigger_range(buffer_size, spinbox)
 
 ### 🖼️ `ui_components.py` - UI Widget Creation
 **Purpose:** PyQt widget creation, styling, and layout management
-**Size:** 950 lines
+**Size:** 2,457 lines
 
 **Key Responsibilities:**
 - **Widget Creation:** Build all UI components (spinboxes, buttons, etc.)
@@ -218,10 +234,10 @@ direct_streaming_plot_downsampled.py
 
 ### **Interaction Patterns:**
 
-#### 1. **Main → Hardware Helpers**
+#### 1. **Main → Hardware Helpers / SDK**
 ```python
 # Hardware initialization and control
-actual_interval = start_hardware_streaming(scope, sample_interval, time_units, ...)
+actual_interval = scope.run_streaming(sample_interval, time_units, ...)  # Direct SDK call
 stop_hardware_streaming(scope)
 register_double_buffers(scope, buffer_0, buffer_1, ...)
 ```
@@ -364,7 +380,10 @@ Main Thread (Qt Event Loop)
 #### **4. Memory Management:**
 - **Pre-allocated Buffers:** Fixed-size arrays
 - **Buffer Reuse:** Double buffering prevents allocation overhead
-- **Efficient Data Types:** INT8 for hardware, FLOAT32 for processing
+- **Mode-Specific Data Types:** 
+  - DECIMATE mode: INT8_T for hardware (faster, less memory)
+  - AVERAGE mode: INT16_T for hardware (required by hardware limitation)
+  - Processing: FLOAT32 for all modes (consistent internal representation)
 
 ### **Performance Metrics:**
 - **Plot Update Rate:** 30 FPS (configurable)
@@ -397,6 +416,13 @@ ANTIALIAS = False
 - **Real-Time Updates:** Performance settings apply immediately
 - **Hardware Restart:** Streaming settings require hardware restart
 - **Validation:** Automatic validation and optimization
+- **Mode-Specific Handling:** Automatic datatype and ADC limits adjustment when switching between DECIMATE and AVERAGE modes
+
+### **Average Downsample Mode Support:**
+- **Mode Detection:** `get_datatype_for_mode()` returns correct datatype based on mode
+- **Automatic Buffer Reallocation:** Hardware buffers reallocated with correct datatype when mode changes
+- **ADC Limits Management:** Y-axis automatically updated when datatype changes (INT8_T ↔ INT16_T)
+- **Hardware Limitation:** AVERAGE mode requires INT16_T (hardware constraint), DECIMATE can use INT8_T
 
 ---
 
@@ -443,6 +469,28 @@ ANTIALIAS = False
 2. **Module-Specific:** Focus optimization within appropriate modules
 3. **Measure Impact:** Verify performance improvements
 4. **Document Changes:** Update performance considerations
+
+---
+
+## 📚 Key Features & Implementations
+
+### **Average Downsample Mode Support**
+
+The application fully supports both DECIMATE and AVERAGE downsampling modes with automatic handling of mode-specific requirements:
+
+**Key Implementation Details:**
+- **Mode-Specific Datatypes:** AVERAGE mode requires INT16_T (hardware limitation), DECIMATE mode uses INT8_T
+- **Automatic Buffer Management:** Buffers are automatically reallocated with correct datatype when mode changes
+- **ADC Limits Management:** Y-axis automatically updates when switching modes to reflect correct ADC limits
+- **Helper Function:** `get_datatype_for_mode()` in `hardware_helpers.py` centralizes datatype selection logic
+
+**Implementation Locations:**
+- `hardware_helpers.py`: `get_datatype_for_mode()` function
+- `ui_helpers.py`: `apply_streaming_restart()` - handles mode changes and ADC limits updates
+- `data_processing.py`: `update_y_axis_from_adc_limits()` - updates plot Y-axis for current datatype
+- `direct_streaming_plot_downsampled.py`: Initial buffer creation and streaming thread use mode-specific datatypes
+
+**Status:** ✅ Fully implemented and tested - ready for production use
 
 ---
 

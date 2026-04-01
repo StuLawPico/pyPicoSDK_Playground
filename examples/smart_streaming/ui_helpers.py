@@ -9,11 +9,19 @@ import time
 import numpy as np
 import pypicosdk as psdk
 from hardware_helpers import (
-    calculate_sample_rate, register_double_buffers, start_hardware_streaming,
+    calculate_sample_rate, register_double_buffers, start_streaming,
     stop_hardware_streaming, clear_hardware_buffers, calculate_optimal_buffer_size,
-    validate_buffer_size, apply_trigger_configuration, time_to_samples, TIME_UNIT_TO_SECONDS
+    validate_buffer_size, apply_trigger_configuration, time_to_samples, TIME_UNIT_TO_SECONDS,
+    get_datatype_for_mode, MIN_RING_BUFFER_SAMPLES
 )
 import data_processing
+
+# Import Qt for deferred plot updates
+try:
+    from pyqtgraph.Qt import QtCore
+    QT_AVAILABLE = True
+except ImportError:
+    QT_AVAILABLE = False
 
 
 def apply_channel_siggen_settings(settings, scope):
@@ -148,7 +156,7 @@ def calculate_what_changed(settings, current_settings):
         current_settings: Dictionary of current settings
     
     Returns:
-        tuple: (settings_changed, performance_changed, time_window_changed, trigger_changed, channel_changed, siggen_changed)
+        tuple: (settings_changed, performance_changed, time_window_changed, trigger_changed, channel_changed, siggen_changed, periodic_log_changed)
     """
     # Channel changes require restart (hardware limitation: half-duplex USB)
     channel_changed = False
@@ -180,6 +188,21 @@ def calculate_what_changed(settings, current_settings):
             settings['new_siggen_wave_type'] != current_settings.get('siggen_wave_type')
         )
     
+    # Periodic logging changes can be applied immediately (no restart needed)
+    periodic_log_changed = False
+    if 'new_periodic_log_enabled' in settings:
+        periodic_log_changed = periodic_log_changed or (
+            settings['new_periodic_log_enabled'] != current_settings.get('PERIODIC_LOG_ENABLED', False)
+        )
+    if 'new_periodic_log_file' in settings:
+        periodic_log_changed = periodic_log_changed or (
+            settings['new_periodic_log_file'] != current_settings.get('PERIODIC_LOG_FILE', '')
+        )
+    if 'new_periodic_log_rate' in settings:
+        periodic_log_changed = periodic_log_changed or (
+            settings['new_periodic_log_rate'] != current_settings.get('PERIODIC_LOG_RATE', 1.0)
+        )
+    
     # Streaming settings that require restart
     settings_changed = (
         settings['new_ratio'] != current_settings['DOWNSAMPLING_RATIO'] or
@@ -207,7 +230,7 @@ def calculate_what_changed(settings, current_settings):
         settings['new_trigger_direction'] != current_settings.get('TRIGGER_DIRECTION', psdk.TRIGGER_DIR.RISING_OR_FALLING)
     )
     
-    return settings_changed, performance_changed, time_window_changed, trigger_changed, channel_changed, siggen_changed
+    return settings_changed, performance_changed, time_window_changed, trigger_changed, channel_changed, siggen_changed, periodic_log_changed
 
 
 def validate_and_optimize_settings(settings, cached_max_memory, hw_buffer_spinbox, hardware_adc_sample_rate, scope=None):
@@ -419,7 +442,6 @@ def apply_time_window(settings, settings_changed, performance_changed,
     calculated_buffer = int((new_time_window * expected_adc_rate) / new_ratio)
     # Minimum for smooth plotting: MIN_RING_BUFFER_SAMPLES or actual calculation, whichever is larger
     # This prevents tiny buffers while allowing high ratios to work correctly
-    MIN_RING_BUFFER_SAMPLES = 100  # Minimum ring buffer size constant
     new_ring_buffer = max(MIN_RING_BUFFER_SAMPLES, calculated_buffer)
     print(f"Ring buffer size: {old_ring_buffer:,} -> {new_ring_buffer:,} samples")
     print(f"  (Time window: {new_time_window:.1f}s, ADC rate: {expected_adc_rate:.2f} Hz, Ratio: {new_ratio}:1)")
@@ -502,12 +524,15 @@ def apply_streaming_restart(settings, scope, buffer_0, buffer_1, data_lock,
     calculated_buffer = int((new_time_window * expected_adc_rate) / new_ratio)
     # Minimum for smooth plotting: MIN_RING_BUFFER_SAMPLES or actual calculation, whichever is larger
     # This prevents tiny buffers while allowing high ratios to work correctly
-    MIN_RING_BUFFER_SAMPLES = 100  # Minimum ring buffer size constant
     new_ring_buffer = max(MIN_RING_BUFFER_SAMPLES, calculated_buffer)
     
     # Check if hardware buffer size changed
     old_buffer_size = settings.get('current_buffer_size', new_buffer_size)
     buffer_size_changed = (new_buffer_size != old_buffer_size)
+    
+    # Check if mode changed (may require different datatype)
+    current_mode = settings.get('current_mode', new_mode)
+    mode_changed = (new_mode != current_mode)
     
     # Note: settings_update_in_progress flag is set by caller before this function
     print("Starting streaming restart...")
@@ -543,14 +568,17 @@ def apply_streaming_restart(settings, scope, buffer_0, buffer_1, data_lock,
         perf_samples_window.clear()  # Clear performance window too!
         print("[OK] Cleared efficiency and performance tracking for recalculation")
         
-        # Reallocate hardware buffers if size changed
+        # Reallocate hardware buffers if size changed OR mode changed (mode may require different datatype)
         # Note: These are returned as part of the return tuple, caller must update globals
         new_buffer_0 = buffer_0
         new_buffer_1 = buffer_1
-        if buffer_size_changed:
-            new_buffer_0 = np.zeros(new_buffer_size, dtype=np.int8)  # Assuming INT8_T
-            new_buffer_1 = np.zeros(new_buffer_size, dtype=np.int8)
-            print(f"[OK] Hardware buffers reallocated: {new_buffer_size:,} samples")
+        if buffer_size_changed or mode_changed:
+            # Get correct datatype for the new mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
+            _, numpy_dtype = get_datatype_for_mode(new_mode)
+            new_buffer_0 = np.zeros(new_buffer_size, dtype=numpy_dtype)
+            new_buffer_1 = np.zeros(new_buffer_size, dtype=numpy_dtype)
+            dtype_name = "INT16" if numpy_dtype == np.int16 else "INT8"
+            print(f"[OK] Hardware buffers reallocated: {new_buffer_size:,} samples (dtype: {dtype_name})")
         
         # Reallocate ring buffer if size changed OR if settings changed (to clear old data)
         # Always reset ring buffer when restarting to ensure clean state with new settings
@@ -585,34 +613,65 @@ def apply_streaming_restart(settings, scope, buffer_0, buffer_1, data_lock,
             print("[CHANNEL] Channel settings applied successfully")
         
         # Re-register buffers with new settings
-        print(f"Re-registering buffers with ratio={new_ratio}, mode={new_mode}")
+        # Get correct datatype for the mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
+        adc_data_type, _ = get_datatype_for_mode(new_mode)
+        dtype_name = "INT16_T" if adc_data_type == psdk.DATA_TYPE.INT16_T else "INT8_T"
+        
+        # Check if datatype changed (which would mean ADC limits changed)
+        current_datatype, _ = get_datatype_for_mode(current_mode)
+        datatype_changed = (adc_data_type != current_datatype)
+        
+        # Update ADC limits and Y-axis if datatype changed (ADC limits are datatype-dependent)
+        if datatype_changed:
+            # Update scope's ADC limits for the new datatype (updates internal state)
+            print(f"[ADC LIMITS] Datatype changed: updating ADC limits for {dtype_name}")
+            min_adc, max_adc = scope.get_adc_limits(datatype=adc_data_type)
+            print(f"[ADC LIMITS] Hardware returned ADC limits: {min_adc} to {max_adc} (datatype: {dtype_name})")
+            
+            # Update plot Y-axis to match new ADC limits (only if plot is provided)
+            # Use QTimer to defer the update slightly to ensure it happens after all operations
+            if plot is not None:
+                if QT_AVAILABLE:
+                    # Defer the Y-axis update to ensure it happens after streaming restart
+                    QtCore.QTimer.singleShot(100, lambda: data_processing.update_y_axis_from_adc_limits(plot, scope, datatype=adc_data_type))
+                else:
+                    # Fallback if Qt is not available (shouldn't happen, but just in case)
+                    data_processing.update_y_axis_from_adc_limits(plot, scope, datatype=adc_data_type)
+                print(f"[ADC LIMITS] Plot Y-axis update scheduled for {dtype_name} datatype")
+            else:
+                print(f"[WARNING] Plot not provided - Y-axis not updated (datatype: {dtype_name})")
+        
+        print(f"Re-registering buffers with ratio={new_ratio}, mode={new_mode}, datatype={dtype_name}")
         register_double_buffers(scope, new_buffer_0, new_buffer_1, new_buffer_size, 
-                               psdk.DATA_TYPE.INT8_T, new_mode)
+                               adc_data_type, new_mode)
         
         # Apply trigger configuration before restarting streaming
+        # Determine if we're in INT8 mode for proper trigger threshold scaling
+        is_int8_mode = (adc_data_type == psdk.DATA_TYPE.INT8_T)
         trigger_enabled = settings.get('new_trigger_enabled', settings.get('current_trigger_enabled', False))
-        trigger_threshold = settings.get('new_trigger_threshold', 50)
-        apply_trigger_configuration(scope, trigger_enabled, trigger_threshold, settings.get('new_trigger_direction'))
+        trigger_threshold = settings.get('new_trigger_threshold', 0)
+        apply_trigger_configuration(scope, trigger_enabled, trigger_threshold, settings.get('new_trigger_direction'), is_int8_mode)
         
         # Short delay after all buffer operations and before restarting streaming
         # This ensures clean state transition and proper hardware synchronization
         time.sleep(0.9)  # 100ms delay for optimal state transition
         
         # Restart streaming with new parameters
-        print("Restarting streaming with new parameters...")
-        actual_interval = start_hardware_streaming(scope, new_interval, new_units, 
-                                                 new_max_pre_trigger, new_max_post_trigger,
-                                                 new_ratio, new_mode, trigger_enabled)
+        actual_interval, new_rate = start_streaming(
+            scope=scope,
+            sample_interval=new_interval,
+            time_units=new_units,
+            max_pre_trigger=new_max_pre_trigger,
+            max_post_trigger=new_max_post_trigger,
+            trigger_enabled=trigger_enabled,
+            ratio=new_ratio,
+            ratio_mode=new_mode
+        )
         
         print(f"[OK] Streaming restarted successfully")
         print(f"  New ratio: {new_ratio}:1")
         print(f"  New mode: {mode_combo.currentText()}")
         print(f"  Actual interval: {actual_interval} {new_units}")
-        
-        # Calculate ACTUAL sample rate from device-returned interval
-        # Note: Pre-trigger/post-trigger samples were already calculated using actual rate
-        # during validation (via get_nearest_sampling_interval), so no recalculation needed
-        new_rate = calculate_sample_rate(actual_interval, new_units)
         
         # Verify the actual rate matches what we calculated during validation
         # (should be very close since we used get_nearest_sampling_interval)
@@ -667,17 +726,23 @@ def apply_streaming_restart(settings, scope, buffer_0, buffer_1, data_lock,
             stop_hardware_streaming(scope)
             time.sleep(0.5)
             clear_hardware_buffers(scope)
+            # Get correct datatype for the previous mode being restored
+            restore_mode = settings.get('current_mode', new_mode)
+            restore_datatype, _ = get_datatype_for_mode(restore_mode)
             register_double_buffers(scope, new_buffer_0, new_buffer_1, old_buffer_size, 
-                                   psdk.DATA_TYPE.INT8_T, settings.get('current_mode', new_mode))
+                                   restore_datatype, restore_mode)
             # Use current trigger state for error recovery
             recovery_trigger_enabled = settings.get('current_trigger_enabled', settings.get('new_trigger_enabled', False))
-            start_hardware_streaming(scope, settings.get('current_interval', new_interval), 
-                                   settings.get('current_units', new_units),
-                                   settings.get('current_max_pre_trigger', new_max_pre_trigger),
-                                   settings.get('current_max_post_trigger', new_max_post_trigger),
-                                   settings.get('current_ratio', new_ratio),
-                                   settings.get('current_mode', new_mode),
-                                   recovery_trigger_enabled)
+            _, _ = start_streaming(
+                scope=scope,
+                sample_interval=settings.get('current_interval', new_interval),
+                time_units=settings.get('current_units', new_units),
+                max_pre_trigger=settings.get('current_max_pre_trigger', new_max_pre_trigger),
+                max_post_trigger=settings.get('current_max_post_trigger', new_max_post_trigger),
+                trigger_enabled=recovery_trigger_enabled,
+                ratio=settings.get('current_ratio', new_ratio),
+                ratio_mode=settings.get('current_mode', new_mode)
+            )
             print("[OK] Restored to previous settings")
         except Exception as restore_error:
             print(f"[WARNING] Failed to restore settings: {restore_error}")
@@ -689,61 +754,6 @@ def apply_streaming_restart(settings, scope, buffer_0, buffer_1, data_lock,
         # Signal streaming thread to resume (caller will handle this, but set event here too)
         settings_update_event.set()
         print("Streaming restart complete")
-
-
-def restart_streaming(scope, buffer_0, buffer_1, data_array, ring_head, ring_filled,
-                     python_ring_buffer, downsampling_ratio, downsampling_mode,
-                     hardware_adc_sample_rate, plot_signal, mode_combo):
-    """
-    Restart streaming after it was stopped.
-    
-    Args:
-        scope: PicoScope device instance
-        buffer_0: First hardware buffer
-        buffer_1: Second hardware buffer
-        data_array: Ring buffer data array
-        ring_head: Ring buffer head position
-        ring_filled: Ring buffer filled count
-        python_ring_buffer: Ring buffer size
-        downsampling_ratio: Downsampling ratio
-        downsampling_mode: Downsampling mode
-        hardware_adc_sample_rate: Hardware ADC sample rate
-        plot_signal: Signal object for thread-safe communication
-        mode_combo: Mode combobox for display text
-    
-    Returns:
-        bool: True if successful, False if error occurred
-    """
-    print("Restarting streaming...")
-    
-    # Clear and reset buffers
-    print("Clearing buffers...")
-    scope.set_data_buffer(psdk.CHANNEL.A, 0, action=psdk.ACTION.CLEAR_ALL)
-    time.sleep(0.1)
-    
-    # Reset ring buffer
-    ring_head = 0
-    ring_filled = 0
-    data_array.fill(0)
-    
-    # Re-register hardware buffers
-    print(f"Re-registering buffers with ratio={downsampling_ratio}, mode={downsampling_mode}")
-    register_double_buffers(scope, buffer_0, buffer_1, len(buffer_0), 
-                           psdk.DATA_TYPE.INT8_T, downsampling_mode)
-    
-    # Restart hardware streaming
-    try:
-        actual_interval = start_hardware_streaming(scope, 800, psdk.TIME_UNIT.PS, 
-                                                 0, 10000, downsampling_ratio, downsampling_mode)
-        print(f"[OK] Hardware streaming restarted (interval={actual_interval})")
-    except Exception as e:
-        print(f"[WARNING] Error restarting streaming: {e}")
-        plot_signal.title_updated.emit("Error Restarting - Check Console")
-        return False
-    
-    # Update UI
-    plot_signal.title_updated.emit(f"Real-time Streaming Data - {downsampling_ratio}:1 {mode_combo.currentText()}")
-    return True
 
 
 # ============================================================================

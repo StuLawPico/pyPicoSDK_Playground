@@ -16,6 +16,9 @@ STREAMING_STOP_DELAY_SEC = 0.5       # Delay after stopping streaming before cle
 MIN_HARDWARE_BUFFER_SAMPLES = 1000   # Minimum hardware buffer size
 TEST_TRIGGER_THRESHOLD_MV = 100      # Test threshold in mV for zero crossing trigger
 
+# Ring buffer constants
+MIN_RING_BUFFER_SAMPLES = 100        # Minimum ring buffer size for smooth plotting
+
 
 # ============================================================================
 # TIME UNIT CONVERSION CONSTANTS
@@ -96,39 +99,27 @@ def time_to_samples(time_value, time_unit, sample_rate_hz):
     return int(round(samples))
 
 
-def compute_interval_from_msps(msps: float):
+def get_datatype_for_mode(downsampling_mode):
     """
-    Convert a desired MSPS (mega samples per second) to (sample_interval, time_units)
-    for scope.run_streaming(). Prefers integer intervals in ns/us/ms.
+    Get the correct ADC data type for a given downsampling mode.
     
     Args:
-        msps: Desired mega samples per second
-        
+        downsampling_mode: Downsampling mode (psdk.RATIO_MODE.DECIMATE or psdk.RATIO_MODE.AVERAGE)
+    
     Returns:
-        tuple: (sample_interval, time_unit)
-        
-    Raises:
-        ValueError: If msps is not positive
+        tuple: (data_type, numpy_dtype) where:
+            - data_type: psdk.DATA_TYPE constant (INT8_T or INT16_T)
+            - numpy_dtype: numpy dtype (np.int8 or np.int16)
+    
+    Note:
+        - DECIMATE mode supports INT8_T (faster, less memory)
+        - AVERAGE mode requires INT16_T (hardware limitation)
     """
-    if msps <= 0:
-        raise ValueError("MSPS must be > 0")
-    
-    # Desired samples per second
-    sps = msps * 1_000_000.0
-    
-    # Try nanoseconds first
-    interval_ns = int(round(1_000_000_000.0 / sps))
-    if interval_ns >= 1:
-        return interval_ns, psdk.TIME_UNIT.NS
-    
-    # Then microseconds
-    interval_us = int(round(1_000_000.0 / sps))
-    if interval_us >= 1:
-        return interval_us, psdk.TIME_UNIT.US
-    
-    # Fallback to milliseconds
-    interval_ms = max(1, int(round(1_000.0 / sps)))
-    return interval_ms, psdk.TIME_UNIT.MS
+    if downsampling_mode == psdk.RATIO_MODE.AVERAGE:
+        return psdk.DATA_TYPE.INT16_T, np.int16
+    else:
+        # DECIMATE and other modes can use INT8_T
+        return psdk.DATA_TYPE.INT8_T, np.int8
 
 
 def register_double_buffers(scope, buffer_0, buffer_1, samples_per_buffer, adc_data_type, downsampling_mode):
@@ -151,43 +142,40 @@ def register_double_buffers(scope, buffer_0, buffer_1, samples_per_buffer, adc_d
         )
 
 
-def start_hardware_streaming(scope, sample_interval, time_units, max_pre_trigger_samples, 
-                           max_post_trigger_samples, downsampling_ratio, downsampling_mode, 
-                           trigger_enabled=True):
+def start_streaming(scope, sample_interval, time_units, max_pre_trigger, 
+                    max_post_trigger, trigger_enabled, ratio, ratio_mode):
     """
-    Start hardware streaming with specified settings.
+    Start hardware streaming with the given configuration.
+    
+    Consolidates the run_streaming() call pattern used throughout the codebase
+    into a single function for consistency and maintainability.
     
     Args:
         scope: PicoScope device instance
         sample_interval: Sample interval value
-        time_units: Time unit enum
-        max_pre_trigger_samples: Pre-trigger samples
-        max_post_trigger_samples: Post-trigger samples
-        downsampling_ratio: Downsampling ratio
-        downsampling_mode: Downsampling mode
-        trigger_enabled: Whether trigger is enabled
+        time_units: Time unit (e.g., psdk.TIME_UNIT.NS)
+        max_pre_trigger: Maximum pre-trigger samples
+        max_post_trigger: Maximum post-trigger samples
+        trigger_enabled: Whether trigger is enabled (bool)
+        ratio: Downsampling ratio
+        ratio_mode: Downsampling mode (e.g., psdk.RATIO_MODE.DECIMATE)
         
     Returns:
-        Actual sample interval achieved by the hardware
+        tuple: (actual_interval, sample_rate_hz)
+            - actual_interval: The actual sample interval returned by hardware
+            - sample_rate_hz: Calculated sample rate in Hz
     """
-    print(f"[STREAMING] Starting with trigger={'enabled' if trigger_enabled else 'disabled'}")
-    print(f"[STREAMING] Max post trigger samples: {max_post_trigger_samples:,}")
-    
-    # Set auto_stop based on trigger state:
-    # - auto_stop=0: Continuous streaming (never auto-stop)
-    # - auto_stop=1: Auto-stop on trigger event
-    auto_stop_value = 1 if trigger_enabled else 0
-    print(f"[STREAMING] Auto-stop setting: {auto_stop_value} ({'stop on trigger' if trigger_enabled else 'continuous streaming'})")
-    
-    return scope.run_streaming(
+    actual_interval = scope.run_streaming(
         sample_interval=sample_interval,
         time_units=time_units,
-        max_pre_trigger_samples=max_pre_trigger_samples,
-        max_post_trigger_samples=max_post_trigger_samples,
-        auto_stop=auto_stop_value,
-        ratio=downsampling_ratio,
-        ratio_mode=downsampling_mode
+        max_pre_trigger_samples=max_pre_trigger,
+        max_post_trigger_samples=max_post_trigger,
+        auto_stop=1 if trigger_enabled else 0,
+        ratio=ratio,
+        ratio_mode=ratio_mode
     )
+    sample_rate = calculate_sample_rate(actual_interval, time_units)
+    return actual_interval, sample_rate
 
 
 def stop_hardware_streaming(scope):
@@ -228,21 +216,31 @@ def clear_hardware_buffers(scope):
         return False
 
 
-def _convert_adc_to_mv(adc_count, adc_range_mv=500, adc_bits=8):
+def scale_adc_threshold_to_hardware(threshold_adc, is_int8_mode):
     """
-    Convert ADC count to millivolts.
+    Scale user ADC threshold to hardware 16-bit ADC value.
+    
+    The hardware trigger always uses 16-bit ADC values internally.
+    When displaying/entering values in 8-bit mode, we need to scale.
     
     Args:
-        adc_count: ADC count value
-        adc_range_mv: ADC range in millivolts (default: 500mV for ±250mV range)
-        adc_bits: ADC resolution in bits (default: 8)
+        threshold_adc: User's threshold value (in display units)
+        is_int8_mode: True if current mode uses INT8 display (-128 to +127),
+                      False if using INT16 display (-32768 to +32767)
     
     Returns:
-        float: Threshold in millivolts
+        int: Threshold in 16-bit ADC counts for hardware
+    
+    Example:
+        - INT8 mode: user enters 50 → hardware gets 50 * 256 = 12,800
+        - INT16 mode: user enters 12,800 → hardware gets 12,800
     """
-    # For 8-bit ADC with 500mV range: 1 ADC count ≈ 500/128 mV ≈ 3.9mV
-    max_adc = 2 ** (adc_bits - 1)  # 128 for 8-bit
-    return (adc_count * adc_range_mv) / max_adc
+    if is_int8_mode:
+        # Scale 8-bit value to 16-bit: multiply by 256
+        return int(threshold_adc * 256)
+    else:
+        # Already in 16-bit range, use directly
+        return int(threshold_adc)
 
 
 def _get_trigger_direction_name(trigger_direction):
@@ -258,45 +256,42 @@ def _get_trigger_direction_name(trigger_direction):
     return TRIGGER_DIRECTION_NAMES.get(trigger_direction, 'Unknown')
 
 
-def _configure_trigger_enabled(scope, trigger_threshold_adc, trigger_direction, use_test_threshold=False):
+def _configure_trigger_enabled(scope, trigger_threshold_adc, trigger_direction, is_int8_mode=True):
     """
     Internal helper to configure enabled trigger.
     
     Args:
         scope: PicoScope device instance
-        trigger_threshold_adc: Trigger threshold in ADC counts
+        trigger_threshold_adc: Trigger threshold in user display units
+                              (INT8: -128 to +127, INT16: -32768 to +32767)
         trigger_direction: Trigger direction enum
-        use_test_threshold: If True and threshold is 0, use 100mV test threshold
+        is_int8_mode: True if current mode uses INT8 display values
     
     Returns:
-        tuple: (success, threshold_mv_used)
+        tuple: (success, hardware_threshold_adc)
     """
-    # Convert ADC threshold to mV for more reliable trigger
-    threshold_mv = _convert_adc_to_mv(trigger_threshold_adc)
     direction_name = _get_trigger_direction_name(trigger_direction)
     
-    # Handle zero crossing with test threshold if needed
-    if trigger_threshold_adc == 0 and use_test_threshold:
-        actual_threshold_mv = TEST_TRIGGER_THRESHOLD_MV  # Test threshold for zero crossing
-        print(f"[CONFIG] Configuring trigger: channel=A, threshold={actual_threshold_mv}mV (test threshold, was {trigger_threshold_adc} ADC), direction={direction_name}")
-    else:
-        actual_threshold_mv = int(threshold_mv)
-        print(f"[CONFIG] Configuring trigger: channel=A, threshold={actual_threshold_mv}mV (was {trigger_threshold_adc} ADC), direction={direction_name}")
+    # Scale threshold to 16-bit hardware ADC value
+    hardware_threshold = scale_adc_threshold_to_hardware(trigger_threshold_adc, is_int8_mode)
+    
+    mode_str = "INT8" if is_int8_mode else "INT16"
+    print(f"[CONFIG] Configuring trigger: channel=A, threshold={trigger_threshold_adc} ({mode_str}) → {hardware_threshold} (16-bit ADC), direction={direction_name}")
     
     try:
         scope.set_simple_trigger(
             channel=psdk.CHANNEL.A,
-            threshold=actual_threshold_mv,
-            threshold_unit='mv',  # Use mV for better reliability
+            threshold=hardware_threshold,
+            threshold_unit='adc',  # Use ADC counts directly
             enable=True,
             direction=trigger_direction,
             auto_trigger=0
         )
-        print(f"[OK] Trigger enabled: threshold={actual_threshold_mv}mV, direction={direction_name}")
-        return True, actual_threshold_mv
+        print(f"[OK] Trigger enabled: threshold={hardware_threshold} ADC (16-bit), direction={direction_name}")
+        return True, hardware_threshold
     except Exception as e:
         print(f"[WARNING] Error configuring trigger: {e}")
-        return False, actual_threshold_mv
+        return False, hardware_threshold
 
 
 def _configure_trigger_disabled(scope):
@@ -323,15 +318,17 @@ def _configure_trigger_disabled(scope):
         return False
 
 
-def configure_default_trigger(scope, trigger_enabled=True, trigger_threshold_adc=50, trigger_direction=None):
+def configure_default_trigger(scope, trigger_enabled=True, trigger_threshold_adc=0, trigger_direction=None, is_int8_mode=True):
     """
     Configure default trigger settings for the scope.
     
     Args:
         scope: PicoScope device instance
         trigger_enabled: Whether to enable trigger
-        trigger_threshold_adc: Trigger threshold in ADC counts
+        trigger_threshold_adc: Trigger threshold in user display units
         trigger_direction: Trigger direction (TRIGGER_DIR enum), defaults to RISING_OR_FALLING
+        is_int8_mode: True if current mode uses INT8 display values (DECIMATE),
+                      False for INT16 (AVERAGE)
         
     Returns:
         bool: True if successful, False if error occurred
@@ -341,10 +338,11 @@ def configure_default_trigger(scope, trigger_enabled=True, trigger_threshold_adc
     
     try:
         if trigger_enabled:
-            success, threshold_mv = _configure_trigger_enabled(scope, trigger_threshold_adc, trigger_direction, use_test_threshold=False)
+            success, hardware_threshold = _configure_trigger_enabled(scope, trigger_threshold_adc, trigger_direction, is_int8_mode)
             if success:
                 direction_name = _get_trigger_direction_name(trigger_direction)
-                print(f"[OK] Default trigger configured: {trigger_threshold_adc} ADC counts ({threshold_mv}mV), direction={direction_name}")
+                mode_str = "INT8" if is_int8_mode else "INT16"
+                print(f"[OK] Default trigger configured: {trigger_threshold_adc} ({mode_str}) → {hardware_threshold} ADC (16-bit), direction={direction_name}")
         else:
             success = _configure_trigger_disabled(scope)
         
@@ -357,15 +355,17 @@ def configure_default_trigger(scope, trigger_enabled=True, trigger_threshold_adc
         return False
 
 
-def apply_trigger_configuration(scope, trigger_enabled, trigger_threshold_adc, trigger_direction=None):
+def apply_trigger_configuration(scope, trigger_enabled, trigger_threshold_adc, trigger_direction=None, is_int8_mode=True):
     """
     Apply trigger configuration based on settings.
     
     Args:
         scope: PicoScope device instance
         trigger_enabled: Whether trigger is enabled
-        trigger_threshold_adc: Trigger threshold in ADC counts
+        trigger_threshold_adc: Trigger threshold in user display units
         trigger_direction: Trigger direction (TRIGGER_DIR enum), defaults to RISING_OR_FALLING
+        is_int8_mode: True if current mode uses INT8 display values (DECIMATE),
+                      False for INT16 (AVERAGE)
         
     Returns:
         bool: True if successful, False if error occurred
@@ -375,8 +375,7 @@ def apply_trigger_configuration(scope, trigger_enabled, trigger_threshold_adc, t
     
     try:
         if trigger_enabled:
-            # Use test threshold for zero crossing in apply (different from default)
-            success, _ = _configure_trigger_enabled(scope, trigger_threshold_adc, trigger_direction, use_test_threshold=True)
+            success, _ = _configure_trigger_enabled(scope, trigger_threshold_adc, trigger_direction, is_int8_mode)
             return success
         else:
             return _configure_trigger_disabled(scope)
@@ -514,9 +513,15 @@ def pull_raw_samples_from_device(scope, total_raw_samples, adc_data_type):
     # Stop scope and enable trigger within pre-trigger samples
     scope.stop()
     
-    # Create buffer for raw data
+    # Create buffer for raw data with correct datatype
+    # Determine numpy dtype from PicoSDK datatype
+    if adc_data_type == psdk.DATA_TYPE.INT16_T:
+        numpy_dtype = np.int16
+    else:  # Default to INT8_T
+        numpy_dtype = np.int8
+    
     try:
-        raw_buffer = np.zeros(total_raw_samples, dtype=np.int8)  # Assuming INT8_T
+        raw_buffer = np.zeros(total_raw_samples, dtype=numpy_dtype)
     except (MemoryError, ValueError) as e:
         error_msg = f"[ERROR] Failed to allocate buffer for {total_raw_samples:,} samples: {e}"
         print(error_msg)
@@ -560,10 +565,11 @@ def pull_raw_samples_from_device(scope, total_raw_samples, adc_data_type):
     
     if n_raw_samples < total_raw_samples:
         print(f"[WARNING] Only got {n_raw_samples:,} samples but requested {total_raw_samples:,}")
-        print(f"[DEBUG] This suggests the device may have limited data available")
+        print(f"[INFO] This suggests the device may have limited data available")
     
     # Extract raw data from buffer (get_values fills the buffer we registered)
-    raw_data = raw_buffer[:n_raw_samples]  # Keep as np.int8, no conversion needed
+    # Convert to float32 for plotting (preserves the actual ADC count values)
+    raw_data = raw_buffer[:n_raw_samples].astype(np.float32)
     
     return raw_data, n_raw_samples
 

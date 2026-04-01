@@ -26,11 +26,155 @@ except ImportError:
         return decorator
 
 
+# ============================================================================
+# CUSTOM TIME AXIS ITEM
+# ============================================================================
+
+class TimeAxisItem(pg.AxisItem):
+    """
+    Custom axis item that displays sample indices as time values.
+    
+    Internally, all x-values are stored as integer sample indices (in raw ADC sample space).
+    This axis converts those indices to time for display, keeping the data layer clean
+    and avoiding floating-point precision issues.
+    
+    Auto-scales to appropriate time units (s, ms, µs, ns) with clean values.
+    The axis label is updated dynamically to show the current unit.
+    
+    Usage:
+        axis = TimeAxisItem(orientation='bottom')
+        axis.set_sample_rate(625e6)  # 625 MSPS
+        plot = win.addPlot(axisItems={'bottom': axis})
+    """
+    
+    def __init__(self, orientation='bottom', **kwargs):
+        super().__init__(orientation, **kwargs)
+        self._sample_rate = 1.0  # Default: 1 sample per second
+        self._current_unit = 's'  # Track current unit for label updates
+        # Disable PyQtGraph's SI prefix - we handle scaling ourselves
+        self.enableAutoSIPrefix(False)
+    
+    def set_sample_rate(self, sample_rate):
+        """
+        Set the hardware ADC sample rate for time conversion.
+        
+        Args:
+            sample_rate: Sample rate in Hz (e.g., 625e6 for 625 MSPS)
+        """
+        if sample_rate > 0:
+            self._sample_rate = float(sample_rate)
+        else:
+            self._sample_rate = 1.0
+        # Force axis to redraw with new scale
+        self.picture = None
+        self.update()
+    
+    def _get_time_unit(self, max_time_seconds):
+        """
+        Determine the appropriate time unit based on the maximum time value.
+        
+        Args:
+            max_time_seconds: Maximum time value in seconds
+            
+        Returns:
+            tuple: (unit_name, scale_factor) e.g., ('ms', 1000)
+        """
+        if max_time_seconds == 0:
+            return ('s', 1)
+        elif max_time_seconds < 1e-6:   # Less than 1 µs → nanoseconds
+            return ('ns', 1e9)
+        elif max_time_seconds < 1e-3:   # Less than 1 ms → microseconds
+            return ('µs', 1e6)
+        elif max_time_seconds < 1:      # Less than 1 s → milliseconds
+            return ('ms', 1e3)
+        else:                           # 1 second or more → seconds
+            return ('s', 1)
+    
+    def tickStrings(self, values, scale, spacing):
+        """
+        Convert sample index values to time strings with auto-scaled units.
+        
+        Args:
+            values: List of sample index values at tick positions
+            scale: Scale factor (usually 1.0)
+            spacing: Spacing between ticks
+            
+        Returns:
+            List of formatted time strings in the appropriate unit
+        """
+        if not values:
+            return []
+        
+        # Convert sample indices to time (seconds)
+        time_values = [v / self._sample_rate for v in values]
+        
+        # Determine appropriate time unit based on the range
+        max_time = max(abs(t) for t in time_values) if time_values else 0
+        unit_name, scale_factor = self._get_time_unit(max_time)
+        
+        # Update axis label if unit changed
+        if unit_name != self._current_unit:
+            self._current_unit = unit_name
+            # Update the label - this is thread-safe via Qt's signal mechanism
+            self.setLabel('Time', units=unit_name)
+        
+        # Convert to the selected unit and format
+        scaled_values = [t * scale_factor for t in time_values]
+        
+        # Use appropriate decimal places based on the scaled values
+        max_scaled = max(abs(v) for v in scaled_values) if scaled_values else 0
+        
+        if max_scaled == 0:
+            return ['0'] * len(values)
+        elif max_scaled < 0.1:
+            return [f'{v:.4f}' for v in scaled_values]
+        elif max_scaled < 1:
+            return [f'{v:.3f}' for v in scaled_values]
+        elif max_scaled < 10:
+            return [f'{v:.2f}' for v in scaled_values]
+        elif max_scaled < 100:
+            return [f'{v:.1f}' for v in scaled_values]
+        else:
+            return [f'{v:.0f}' for v in scaled_values]
+
+
+def samples_to_time(sample_index, sample_rate):
+    """
+    Convert sample index to time in seconds.
+    
+    Args:
+        sample_index: Sample index (integer or array)
+        sample_rate: Hardware ADC sample rate in Hz
+        
+    Returns:
+        Time in seconds (float or array)
+    """
+    return sample_index / sample_rate if sample_rate > 0 else sample_index
+
+
+def time_window_to_samples(time_window, sample_rate, downsampling_ratio):
+    """
+    Convert a time window (seconds) to number of samples.
+    
+    Args:
+        time_window: Time window in seconds
+        sample_rate: Hardware ADC sample rate in Hz
+        downsampling_ratio: Downsampling ratio
+        
+    Returns:
+        Number of raw ADC samples corresponding to the time window
+    """
+    return int(time_window * sample_rate)
+
+
 
 def update_plot(curve, data_array, ring_head, ring_filled, python_ring_buffer, 
-                downsampling_ratio, data_lock, data_updated, time_conversion_factor=None):
+                downsampling_ratio, data_lock, data_updated):
     """
     Update the PyQtGraph plot with latest streaming data.
+    
+    X-axis values are integer sample indices (in raw ADC sample space).
+    The TimeAxisItem handles conversion to time for display.
     
     Args:
         curve: PyQtGraph plot curve object
@@ -41,8 +185,6 @@ def update_plot(curve, data_array, ring_head, ring_filled, python_ring_buffer,
         downsampling_ratio: Downsampling ratio for x-axis scaling
         data_lock: Threading lock for data access
         data_updated: Flag indicating if new data is available
-        time_conversion_factor: Pre-calculated factor (1 / hardware_adc_sample_rate) for time conversion
-                               Only recalculated when settings change, not on every plot update
         
     Returns:
         bool: True if plot was updated, False if no new data
@@ -56,26 +198,14 @@ def update_plot(curve, data_array, ring_head, ring_filled, python_ring_buffer,
         if ring_filled < python_ring_buffer:
             # Not full yet: show 0..ring_filled-1
             y_vals = data_array[:ring_filled]
-            # Create x-axis with gaps for downsampled data
-            # Convert to raw sample indices, then to time if conversion factor is provided
-            raw_sample_indices = np.arange(ring_filled, dtype=np.float32) * downsampling_ratio
-            if time_conversion_factor is not None and time_conversion_factor > 0:
-                # Convert sample indices to time (seconds) using cached conversion factor
-                x_vals = raw_sample_indices * time_conversion_factor
-            else:
-                # Fallback to sample indices if conversion factor not available
-                x_vals = raw_sample_indices
+            # X-axis: integer sample indices in raw ADC sample space
+            # Each downsampled point represents 'downsampling_ratio' raw samples
+            x_vals = np.arange(ring_filled, dtype=np.int64) * downsampling_ratio
         else:
             # Full: logical order is [ring_head..end) then [0..ring_head)
             y_vals = np.concatenate((data_array[ring_head:], data_array[:ring_head]))
-            # Create x-axis with gaps for downsampled data
-            raw_sample_indices = np.arange(python_ring_buffer, dtype=np.float32) * downsampling_ratio
-            if time_conversion_factor is not None and time_conversion_factor > 0:
-                # Convert sample indices to time (seconds) using cached conversion factor
-                x_vals = raw_sample_indices * time_conversion_factor
-            else:
-                # Fallback to sample indices if conversion factor not available
-                x_vals = raw_sample_indices
+            # X-axis: integer sample indices in raw ADC sample space
+            x_vals = np.arange(python_ring_buffer, dtype=np.int64) * downsampling_ratio
 
         # Ensure x and y arrays have matching lengths
         min_len = min(len(x_vals), len(y_vals))
@@ -349,14 +479,16 @@ def create_raw_data_curve(plot, antialias=False, downsample_mode='subsample'):
     return raw_curve
 
 
-def setup_plot_optimizations(plot, target_time_window, hardware_adc_sample_rate, scope=None, datatype=None):
+def setup_plot_optimizations(plot, max_sample_index, scope=None, datatype=None):
     """
     Configure plot optimizations for real-time streaming.
     
+    X-axis is in sample index space (raw ADC samples). The TimeAxisItem
+    handles conversion to time for display.
+    
     Args:
         plot: PyQtGraph plot widget
-        target_time_window: Target time window in seconds
-        hardware_adc_sample_rate: Hardware ADC sample rate
+        max_sample_index: Maximum sample index for x-range (in raw ADC sample space)
         scope: Optional PicoScope object to get ADC limits from. If provided,
                y-axis will be constrained to ADC limits.
         datatype: Optional DATA_TYPE enum (e.g., psdk.DATA_TYPE.INT8_T).
@@ -369,8 +501,8 @@ def setup_plot_optimizations(plot, target_time_window, hardware_adc_sample_rate,
     # Disable auto-range for both axes initially
     plot.enableAutoRange(x=False, y=False)
     
-    # Set x-range based on time window (now in time, not samples)
-    plot.setXRange(0, target_time_window, padding=0)
+    # Set x-range based on sample count (TimeAxisItem converts to time for display)
+    plot.setXRange(0, max_sample_index, padding=0)
     
     # Set y-axis range based on ADC limits if scope is provided
     if scope is not None:
@@ -413,14 +545,17 @@ def update_y_axis_from_adc_limits(plot, scope, datatype=None):
     
     vb = plot.getViewBox()
     
+    # Disable auto-range for Y-axis (critical for maintaining fixed range)
+    plot.enableAutoRange(x=False, y=False)
+    
+    # Lock y-axis limits first to prevent auto-range from interfering
+    vb.setLimits(yMin=y_min, yMax=y_max)
+    
     # Set y-axis range with no padding (padding=0 ensures exact range)
     plot.setYRange(y_min, y_max, padding=0)
     
-    # Lock y-axis limits to prevent auto-range or user interaction from changing it
-    # setLimits() ensures the view cannot go outside these bounds
-    vb.setLimits(yMin=y_min, yMax=y_max)
-    
-    # Note: Auto-range is already disabled at plot level with enableAutoRange(x=False, y=False)
+    # Force the viewbox to update its range immediately
+    vb.enableAutoRange(enable=False)
 
 
 def enforce_y_axis_adc_limits(plot, scope, buffer_percent=0.05, datatype=None):
@@ -475,20 +610,23 @@ def _calculate_raw_data_time_alignment_numba(ring_filled, downsampling_ratio,
 
 
 def calculate_raw_data_time_alignment(ring_filled, downsampling_ratio, trigger_at_sample, 
-                                      n_raw_samples, hardware_adc_sample_rate=None):
+                                      n_raw_samples):
     """
-    Calculate time alignment for raw data overlay on downsampled plot.
+    Calculate sample index alignment for raw data overlay on downsampled plot.
     The raw trace should end where the downsampled trace ends and work backwards.
+    
+    Returns integer sample indices (in raw ADC sample space). The TimeAxisItem
+    handles conversion to time for display.
     
     Args:
         ring_filled: Number of filled samples in ring buffer
         downsampling_ratio: Downsampling ratio
         trigger_at_sample: Trigger position in downsampled space
         n_raw_samples: Number of raw samples retrieved
-        hardware_adc_sample_rate: Actual hardware ADC sample rate in Hz (for time-based x-axis)
         
     Returns:
-        tuple: (raw_x_data, raw_end_pos, raw_start_pos) where raw_x_data is the x-axis array (in time if rate provided)
+        tuple: (raw_x_indices, raw_end_pos, raw_start_pos) where raw_x_indices is 
+               an int64 array of sample indices in raw ADC sample space
     """
     # Use Numba-optimized calculation if available
     if NUMBA_AVAILABLE:
@@ -504,28 +642,16 @@ def calculate_raw_data_time_alignment(ring_filled, downsampling_ratio, trigger_a
         raw_end_pos = downsampled_end_pos
         raw_start_pos = raw_end_pos - (n_raw_samples - 1)
     
-    # Create x-axis for raw data (in original sample space, aligned with downsampled data)
+    # Create x-axis for raw data as integer sample indices
     # Each raw sample corresponds to one original ADC sample
     # The raw data should span from raw_start_pos to raw_end_pos
     # Raw samples are consecutive: [raw_start_pos, raw_start_pos+1, ..., raw_end_pos]
-    raw_sample_indices = np.arange(n_raw_samples, dtype=np.float64) + float(raw_start_pos)
+    raw_x_indices = np.arange(n_raw_samples, dtype=np.int64) + int(raw_start_pos)
     
-    # Convert to time if sample rate is provided (to match downsampled data x-axis)
-    # Each raw sample is exactly 1/hardware_adc_sample_rate seconds apart
-    # CRITICAL: Use float64 for time axis to preserve precision at high sample rates
-    # At 625 MSPS, time per sample is 1.6e-09 seconds, which float32 cannot represent precisely
-    if hardware_adc_sample_rate is not None and hardware_adc_sample_rate > 0:
-        # Calculate time conversion factor for raw data (1 / hardware ADC rate)
-        # This ensures each raw sample is spaced by exactly 1/hardware_adc_sample_rate seconds
-        raw_time_conversion_factor = 1.0 / float(hardware_adc_sample_rate)
-        # Keep as float64 to preserve precision - PyQtGraph can handle float64
-        raw_x_data = raw_sample_indices * raw_time_conversion_factor
-    else:
-        raw_x_data = raw_sample_indices
-    
-    return raw_x_data, raw_end_pos, raw_start_pos
+    return raw_x_indices, raw_end_pos, raw_start_pos
 
 
+def format_memory_size(bytes_value):
     """
     Format memory size in bytes to human-readable format.
     

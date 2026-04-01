@@ -21,11 +21,11 @@ import numpy as np
 import pypicosdk as psdk
 
 # Create a local variable to hold number of samples for use in later functions
-SAMPLES = 500
+SAMPLES = 5000
 
 # Create a local variable to hold number of captures for use in
 # run_simple_rapid_block_capture helper function
-CAPTURES = 1000
+CAPTURES = 10
 
 # Create "scope" class and initialize PicoScope
 scope = psdk.ps6000a()
@@ -35,14 +35,14 @@ scope.open_unit(resolution="12bit")
 scope.set_channel(channel=psdk.CHANNEL.A, coupling=psdk.COUPLING.DC_50OHM, range=psdk.RANGE.mV500)
 
 # Configure a simple rising edge trigger for channel A, wait indefinitely (do not auto trigger)
-scope.set_simple_trigger(channel=psdk.CHANNEL.A, threshold=200,
+scope.set_simple_trigger(channel=psdk.CHANNEL.A, threshold=200, threshold_unit="mv",
                          direction=psdk.TRIGGER_DIR.RISING, auto_trigger=0)
 
 # Set siggen to 10MHz & 0.9Vpkpk output sine wave
-scope.set_siggen(frequency=10_000_000, pk2pk=0.9, wave_type=psdk.WAVEFORM.SINE)
+scope.set_siggen(frequency=50_000, pk2pk=0.9, wave_type=psdk.WAVEFORM.SINE)
 
 # Helper function to set timebase of scope via requested sample rate
-TIMEBASE = scope.sample_rate_to_timebase(1.25, psdk.SAMPLE_RATE.GSPS)
+TIMEBASE = scope.sample_rate_to_timebase(250, psdk.SAMPLE_RATE.KSPS)
 
 # Unused alternate methods to set sample rate / interval
 # TIMEBASE = 2                                      # direct driver timebase

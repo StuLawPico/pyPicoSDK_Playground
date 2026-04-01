@@ -41,20 +41,21 @@ import pypicosdk as psdk
 
 
 # Import UI components module
-from ui_components import build_control_panel, STYLES, create_status_display_widget, create_separator, STATUS_COLOR_SCHEMES, create_status_bar
+from ui_components import build_control_panel, STYLES, create_status_display_widget, create_separator, STATUS_COLOR_SCHEMES, create_status_bar, update_trigger_threshold_range
 
 # Import helper modules
 from hardware_helpers import (
-    calculate_sample_rate, register_double_buffers, start_hardware_streaming,
+    calculate_sample_rate, register_double_buffers, start_streaming,
     stop_hardware_streaming, clear_hardware_buffers,
-    compute_interval_from_msps, configure_default_trigger, apply_trigger_configuration,
+    configure_default_trigger, apply_trigger_configuration,
     calculate_optimal_buffer_size, validate_buffer_size, time_to_samples,
-    TIME_UNIT_NAMES, TIME_UNIT_TO_SECONDS,
+    TIME_UNIT_NAMES, TIME_UNIT_TO_SECONDS, get_datatype_for_mode,
     pull_raw_samples_from_device, get_trigger_position_from_device
 )
 import data_processing
 from data_processing import (
-    drain_remaining_buffers, calculate_raw_data_time_alignment
+    drain_remaining_buffers, calculate_raw_data_time_alignment,
+    TimeAxisItem, time_window_to_samples
 )
 from ui_helpers import (
     update_buffer_status, update_efficiency_display
@@ -90,42 +91,42 @@ except:
 
 INITIAL_CONFIG = {
     # Streaming Configuration
-    'downsampling_ratio': 64000,
+    'downsampling_ratio': 640,
     'downsampling_mode': psdk.RATIO_MODE.DECIMATE,
-    'sample_interval': 1,  # Request sample interval in nanoseconds
+    'sample_interval': 1000,  # Request sample interval in nanoseconds
     'time_units': psdk.TIME_UNIT.NS,
-    
+
     # Buffer Configuration
     'samples_per_buffer': 1000000,  # Samples per hardware buffer (will be auto-calculated if optimal)
     'target_time_window': 1.0,  # Target time window in seconds (user-adjustable via slider)
     'python_ring_buffer': 100_000,  # Initial Python circular buffer size (will be recalculated based on ratio and time window)
-    
+
     # Channel Configuration
     'channel_range': psdk.RANGE.mV500,
     'channel_coupling': psdk.COUPLING.DC_50OHM,
     'channel_probe_scale': 1.0,
-    
+
     # Signal Generator Configuration
     'siggen_frequency': 1.0,  # Hz
     'siggen_pk2pk': 0.95,  # V
     'siggen_wave_type': psdk.WAVEFORM.SINE,
-    
+
     # Trigger Configuration
     'trigger_enabled': False,
-    'trigger_threshold_adc': 50,  # Trigger threshold in ADC counts
+    'trigger_threshold_adc': 0,  # Trigger threshold in ADC counts (0 = zero crossing)
     'trigger_direction': psdk.TRIGGER_DIR.RISING_OR_FALLING,
     'pre_trigger_time': 0.0,
     'pre_trigger_time_units': psdk.TIME_UNIT.MS,
     'post_trigger_time': 1.0,
     'post_trigger_time_units': psdk.TIME_UNIT.MS,
-    
+
     # Display Configuration
     'refresh_fps': 30,  # Plot refresh rate in frames per second
     'raw_data_downsample_enabled': True,  # Enable PyQtGraph downsampling for raw data
     'raw_data_downsample_mode': 'subsample',  # Downsampling mode: 'subsample', 'mean', or 'peak'
     'raw_data_downsample_factor': 100,  # Downsampling factor (1 = no downsampling)
     'raw_data_max_points': 500_000,  # Maximum number of downsampled points to display
-    
+
     # System Configuration (not user-changeable via UI, but part of initial config)
     'polling_interval': 0.001,  # Hardware polling interval in seconds (1ms)
     'adc_data_type': psdk.DATA_TYPE.INT8_T,  # 8-bit signed integer (-128 to +127)
@@ -133,16 +134,12 @@ INITIAL_CONFIG = {
     'use_opengl': False,  # OpenGL acceleration disabled for simplicity
     'plot_pen_width': 1,  # Line width
     'antialias': False,  # Disable antialiasing for performance
-    
+
     # Periodic Logging Configuration
     'periodic_log_enabled': False,  # Enable/disable periodic logging
     'periodic_log_file': "",  # Log file path (empty = disabled)
     'periodic_log_rate': 1.0,  # Log rate in seconds (how often to write)
 }
-
-# Optional: configure target streaming rate in MSPS (mega-samples per second)
-# Set to a float (e.g., 0.3 for 300 kS/s, 1.0 for 1 MS/s) or None to keep defaults
-STREAM_RATE_MSPS = None  # Disabled - using explicit sample_interval instead
 
 # System Constants (not part of configuration, never change)
 SYSTEM_CONSTANTS = {
@@ -215,21 +212,6 @@ scope = psdk.ps6000a()
 scope.open_unit(resolution=psdk.RESOLUTION._8BIT)
 print(f"Connected to: {scope.get_unit_serial()}")
 
-
-
-# If configured, override sample_interval/time_units from MSPS
-if STREAM_RATE_MSPS is not None:
-    try:
-        computed_interval, computed_units = compute_interval_from_msps(STREAM_RATE_MSPS)
-        INITIAL_CONFIG['sample_interval'] = computed_interval
-        INITIAL_CONFIG['time_units'] = computed_units
-        # Update legacy constants for backward compatibility
-        sample_interval = computed_interval
-        time_units = computed_units
-        print(f"Configured streaming interval from {STREAM_RATE_MSPS} MSPS -> interval={computed_interval} units={computed_units}")
-    except Exception as e:
-        print(f"[WARNING] Failed to set interval from MSPS ({STREAM_RATE_MSPS}): {e}. Using defaults.")
-
 # Configure signal generator for test signal
 scope.set_siggen(
     frequency=INITIAL_CONFIG['siggen_frequency'],
@@ -281,13 +263,16 @@ print("\nSetting up double buffers...")
 # Clear any existing buffers
 scope.set_data_buffer(psdk.CHANNEL.A, 0, action=psdk.ACTION.CLEAR_ALL)
 
-# Create buffers
-buffer_0 = np.zeros(INITIAL_CONFIG['samples_per_buffer'], dtype=INITIAL_CONFIG['adc_numpy_type'])
-buffer_1 = np.zeros(INITIAL_CONFIG['samples_per_buffer'], dtype=INITIAL_CONFIG['adc_numpy_type'])
+# Create buffers with correct datatype for the mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
+adc_data_type, numpy_dtype = get_datatype_for_mode(INITIAL_CONFIG['downsampling_mode'])
+dtype_name = "INT16_T" if adc_data_type == psdk.DATA_TYPE.INT16_T else "INT8_T"
+print(f"Creating buffers with datatype: {dtype_name} (mode: {'AVERAGE' if INITIAL_CONFIG['downsampling_mode'] == psdk.RATIO_MODE.AVERAGE else 'DECIMATE'})")
+buffer_0 = np.zeros(INITIAL_CONFIG['samples_per_buffer'], dtype=numpy_dtype)
+buffer_1 = np.zeros(INITIAL_CONFIG['samples_per_buffer'], dtype=numpy_dtype)
 
 # Register buffers with hardware (downsampled mode)
 print("Registering double buffers...")
-register_double_buffers(scope, buffer_0, buffer_1, INITIAL_CONFIG['samples_per_buffer'], INITIAL_CONFIG['adc_data_type'], INITIAL_CONFIG['downsampling_mode'])
+register_double_buffers(scope, buffer_0, buffer_1, INITIAL_CONFIG['samples_per_buffer'], adc_data_type, INITIAL_CONFIG['downsampling_mode'])
 print("[OK] Double buffer setup complete")
 
 # ============================================================================
@@ -296,10 +281,13 @@ print("[OK] Double buffer setup complete")
 
 # Configure simple trigger with default settings (after buffers are registered)
 try:
-    print(f"[CONFIG] Configuring default trigger: channel=A, threshold={INITIAL_CONFIG['trigger_threshold_adc']} ADC")
+    # Determine if we're in INT8 mode (DECIMATE) or INT16 mode (AVERAGE)
+    is_int8_mode = (adc_data_type == psdk.DATA_TYPE.INT8_T)
+    mode_str = "INT8" if is_int8_mode else "INT16"
+    print(f"[CONFIG] Configuring default trigger: channel=A, threshold={INITIAL_CONFIG['trigger_threshold_adc']} ADC ({mode_str})")
     print(f"[CONFIG] Trigger enabled: {INITIAL_CONFIG['trigger_enabled']}, Max post trigger: {MAX_POST_TRIGGER_SAMPLES:,} samples")
 
-    configure_default_trigger(scope, INITIAL_CONFIG['trigger_enabled'], INITIAL_CONFIG['trigger_threshold_adc'], INITIAL_CONFIG['trigger_direction'])
+    configure_default_trigger(scope, INITIAL_CONFIG['trigger_enabled'], INITIAL_CONFIG['trigger_threshold_adc'], INITIAL_CONFIG['trigger_direction'], is_int8_mode)
 
 except Exception as e:
     print(f"[WARNING] Error configuring default trigger: {e}")
@@ -310,30 +298,28 @@ except Exception as e:
 # ============================================================================
 
 print("Starting hardware streaming...")
-print(f"[STARTUP] Final configuration before streaming:")
-print(f"  - Trigger enabled: {INITIAL_CONFIG['trigger_enabled']}")
-print(f"  - Trigger threshold: {INITIAL_CONFIG['trigger_threshold_adc']} ADC counts")
-print(f"  - Max post trigger: {MAX_POST_TRIGGER_SAMPLES:,} samples")
-print(f"  - Buffer size: {INITIAL_CONFIG['samples_per_buffer']:,} samples")
 
-
-actual_interval = start_hardware_streaming(scope, INITIAL_CONFIG['sample_interval'], INITIAL_CONFIG['time_units'],
-                                          MAX_PRE_TRIGGER_SAMPLES, MAX_POST_TRIGGER_SAMPLES,
-                                          INITIAL_CONFIG['downsampling_ratio'], INITIAL_CONFIG['downsampling_mode'], INITIAL_CONFIG['trigger_enabled'])
+actual_interval, sample_rate = start_streaming(
+    scope=scope,
+    sample_interval=INITIAL_CONFIG['sample_interval'],
+    time_units=INITIAL_CONFIG['time_units'],
+    max_pre_trigger=MAX_PRE_TRIGGER_SAMPLES,
+    max_post_trigger=MAX_POST_TRIGGER_SAMPLES,
+    trigger_enabled=INITIAL_CONFIG['trigger_enabled'],
+    ratio=INITIAL_CONFIG['downsampling_ratio'],
+    ratio_mode=INITIAL_CONFIG['downsampling_mode']
+)
 
 print(f"Actual sample interval: {actual_interval} {INITIAL_CONFIG['time_units']}")
-# Calculate sample rate based on the time units
-sample_rate = calculate_sample_rate(actual_interval, INITIAL_CONFIG['time_units'])
 print(f"Actual sample rate: {sample_rate:.2f} Hz")
 
 # Store hardware ADC sample rate for position tracking
 hardware_adc_sample_rate = sample_rate
 print(f"Stored hardware ADC sample rate for tracking: {hardware_adc_sample_rate:.2f} Hz")
 
-# Calculate and cache time conversion factor (1 / sample_rate) for efficient time series calculation
-# This factor is only recalculated when settings change, not on every plot update
-time_conversion_factor = 1.0 / hardware_adc_sample_rate if hardware_adc_sample_rate > 0 else None
-print(f"Cached time conversion factor: {time_conversion_factor:.12e} s/sample (1 / {hardware_adc_sample_rate:.2f} Hz)")
+# Note: Time axis conversion is handled by TimeAxisItem class
+# The axis will be created later with this sample rate
+print(f"Hardware ADC sample rate stored: {hardware_adc_sample_rate:.2f} Hz")
 
 # Update initial rate display
 initial_msps = sample_rate / 1_000_000
@@ -629,38 +615,17 @@ def on_apply_button_clicked():
         'channel_probe_scale': INITIAL_CONFIG['channel_probe_scale'],
         'siggen_frequency': INITIAL_CONFIG['siggen_frequency'],
         'siggen_pk2pk': INITIAL_CONFIG['siggen_pk2pk'],
-        'siggen_wave_type': INITIAL_CONFIG['siggen_wave_type']
+        'siggen_wave_type': INITIAL_CONFIG['siggen_wave_type'],
+        # Periodic logging settings
+        'PERIODIC_LOG_ENABLED': PERIODIC_LOG_ENABLED,
+        'PERIODIC_LOG_FILE': PERIODIC_LOG_FILE,
+        'PERIODIC_LOG_RATE': PERIODIC_LOG_RATE
     }
 
-    settings_changed, performance_changed, time_window_changed, trigger_changed, channel_changed, siggen_changed = calculate_what_changed(settings, current_settings)
-
-    # Debug output
-    print(f"[DEBUG] Change detection: settings={settings_changed}, performance={performance_changed}, "
-          f"time_window={time_window_changed}, trigger={trigger_changed}, channel={channel_changed}, siggen={siggen_changed}")
-    if trigger_changed:
-        print(f"[DEBUG] Trigger change details:")
-        print(f"  enabled: {current_settings['TRIGGER_ENABLED']} -> {settings['new_trigger_enabled']}")
-        print(f"  threshold: {current_settings['TRIGGER_THRESHOLD_ADC']} -> {settings['new_trigger_threshold']}")
-        print(f"  direction: {current_settings.get('TRIGGER_DIRECTION')} -> {settings['new_trigger_direction']}")
-    if channel_changed:
-        print(f"[DEBUG] Channel change details (requires restart):")
-        if 'new_channel_range' in settings:
-            print(f"  channel_range: {current_settings.get('channel_range')} -> {settings['new_channel_range']}")
-        if 'new_channel_coupling' in settings:
-            print(f"  channel_coupling: {current_settings.get('channel_coupling')} -> {settings['new_channel_coupling']}")
-        if 'new_channel_probe_scale' in settings:
-            print(f"  channel_probe_scale: {current_settings.get('channel_probe_scale')} -> {settings['new_channel_probe_scale']}")
-    if siggen_changed:
-        print(f"[DEBUG] SigGen change details (no restart needed):")
-        if 'new_siggen_frequency' in settings:
-            print(f"  siggen_frequency: {current_settings.get('siggen_frequency')} -> {settings['new_siggen_frequency']}")
-        if 'new_siggen_pk2pk' in settings:
-            print(f"  siggen_pk2pk: {current_settings.get('siggen_pk2pk')} -> {settings['new_siggen_pk2pk']}")
-        if 'new_siggen_wave_type' in settings:
-            print(f"  siggen_wave_type: {current_settings.get('siggen_wave_type')} -> {settings['new_siggen_wave_type']}")
+    settings_changed, performance_changed, time_window_changed, trigger_changed, channel_changed, siggen_changed, periodic_log_changed = calculate_what_changed(settings, current_settings)
 
     # Step 3: Early exit if nothing changed
-    if not (settings_changed or performance_changed or time_window_changed or trigger_changed or siggen_changed):
+    if not (settings_changed or performance_changed or time_window_changed or trigger_changed or siggen_changed or periodic_log_changed):
         print("No changes detected")
         return
 
@@ -671,33 +636,47 @@ def on_apply_button_clicked():
         print("  Trigger changes are disabled to prevent inconsistent behavior.")
         return
 
-    # Step 4: Print what's changing
-    print(f"\n[UPDATE] Updating settings:")
-    if settings_changed:
-        print(f"  Streaming: ratio={settings['new_ratio']} (current: {DOWNSAMPLING_RATIO}), "
-              f"mode={settings['new_mode']}, interval={settings['new_interval']}, "
-              f"units={settings['new_units']}, hw_buffer={settings['new_buffer_size']} (current: {SAMPLES_PER_BUFFER})")
-        # Print trigger times (samples will be calculated during validation)
-        pre_units_str = TIME_UNIT_NAMES.get(settings['new_pre_trigger_units'], '?')
-        post_units_str = TIME_UNIT_NAMES.get(settings['new_post_trigger_units'], '?')
-        print(f"  Trigger times: pre={settings['new_pre_trigger_time']} {pre_units_str}, "
-              f"post={settings['new_post_trigger_time']} {post_units_str}")
-    if channel_changed:
-        print(f"  Channel (requires restart): range={settings.get('new_channel_range', 'unchanged')}, "
-              f"coupling={settings.get('new_channel_coupling', 'unchanged')}, "
-              f"probe_scale={settings.get('new_channel_probe_scale', 'unchanged')}")
-    if performance_changed:
-        print(f"  Performance: refresh={settings['new_refresh_fps']} FPS, "
-              f"poll={settings['new_poll_interval']*1000:.2f}ms")
-    if time_window_changed:
-        print(f"  Time Window: {TARGET_TIME_WINDOW:.1f}s -> {settings['new_time_window']:.1f}s")
-    if trigger_changed:
-        direction_name = {psdk.TRIGGER_DIR.RISING: 'Rising',
-                         psdk.TRIGGER_DIR.FALLING: 'Falling',
-                         psdk.TRIGGER_DIR.RISING_OR_FALLING: 'Rising or Falling',
-                         psdk.TRIGGER_DIR.ABOVE: 'Above',
-                         psdk.TRIGGER_DIR.BELOW: 'Below'}.get(settings['new_trigger_direction'], 'Unknown')
-        print(f"  Trigger: enabled={settings['new_trigger_enabled']}, threshold={settings['new_trigger_threshold']} ADC, direction={direction_name}")
+    # Step 4: Print only the specific values that changed
+    # Define what to check: (new_key, current_key, label, formatter)
+    # formatter can be: None (use str), a format string, or a callable
+    change_checks = [
+        ('new_ratio', 'DOWNSAMPLING_RATIO', 'ratio', lambda v: f"{v:,}"),
+        ('new_mode', 'DOWNSAMPLING_MODE', 'mode', None),
+        ('new_interval', 'sample_interval', 'interval', None),
+        ('new_buffer_size', 'SAMPLES_PER_BUFFER', 'buffer', lambda v: f"{v:,}"),
+        ('new_channel_range', 'channel_range', 'range', None),
+        ('new_channel_coupling', 'channel_coupling', 'coupling', None),
+        ('new_channel_probe_scale', 'channel_probe_scale', 'probe', lambda v: f"{v}x"),
+        ('new_trigger_enabled', 'TRIGGER_ENABLED', 'trigger', lambda v: 'ON' if v else 'OFF'),
+        ('new_trigger_threshold', 'TRIGGER_THRESHOLD_ADC', 'threshold', lambda v: f"{v} ADC"),
+        ('new_trigger_direction', 'TRIGGER_DIRECTION', 'direction',
+         lambda v: {psdk.TRIGGER_DIR.RISING: 'Rising', psdk.TRIGGER_DIR.FALLING: 'Falling',
+                    psdk.TRIGGER_DIR.RISING_OR_FALLING: 'Rising/Falling'}.get(v, '?')),
+        ('new_time_window', 'TARGET_TIME_WINDOW', 'time_window', lambda v: f"{v:.1f}s"),
+        ('new_refresh_fps', 'REFRESH_FPS', 'fps', None),
+        ('new_poll_interval', 'POLLING_INTERVAL', 'poll', lambda v: f"{v*1000:.1f}ms"),
+        ('new_periodic_log_enabled', 'PERIODIC_LOG_ENABLED', 'logging', lambda v: 'ON' if v else 'OFF'),
+        ('new_periodic_log_file', 'PERIODIC_LOG_FILE', 'log_file', None),
+        ('new_periodic_log_rate', 'PERIODIC_LOG_RATE', 'log_rate', lambda v: f"{v:.1f}s"),
+    ]
+
+    changes = []
+    for new_key, current_key, label, formatter in change_checks:
+        new_val = settings.get(new_key)
+        current_val = current_settings.get(current_key)
+        if new_val != current_val:
+            formatted = formatter(new_val) if formatter else str(new_val)
+            changes.append(f"{label}={formatted}")
+
+    # Special handling for trigger times (need unit lookup)
+    if settings['new_pre_trigger_time'] != current_settings.get('PRE_TRIGGER_TIME'):
+        units = TIME_UNIT_NAMES.get(settings['new_pre_trigger_units'], '?')
+        changes.append(f"pre_trigger={settings['new_pre_trigger_time']} {units}")
+    if settings['new_post_trigger_time'] != current_settings.get('POST_TRIGGER_TIME'):
+        units = TIME_UNIT_NAMES.get(settings['new_post_trigger_units'], '?')
+        changes.append(f"post_trigger={settings['new_post_trigger_time']} {units}")
+
+    print(f"\n[UPDATE] {', '.join(changes)}")
 
     # Step 5: Validate and optimize settings
     # Provide current values so validation can detect ratio/buffer changes correctly
@@ -725,11 +704,9 @@ def on_apply_button_clicked():
         print("[ERROR] Validation failed - settings not applied")
         return  # Validation failed, error already printed
 
-    print(f"[DEBUG] After validation: ratio={settings['new_ratio']}, buffer_size={settings['new_buffer_size']}")
-
-    # Print trigger samples after validation (now available)
+    # Print calculated trigger samples after validation
     if settings_changed and ('new_max_pre_trigger' in settings and 'new_max_post_trigger' in settings):
-        print(f"  Trigger samples: pre={settings['new_max_pre_trigger']:,}, post={settings['new_max_post_trigger']:,}")
+        print(f"  Trigger samples (calculated): pre={settings['new_max_pre_trigger']:,}, post={settings['new_max_post_trigger']:,}")
 
     # Step 6: Apply performance settings (no restart needed)
     if performance_changed:
@@ -760,7 +737,7 @@ def on_apply_button_clicked():
             siggen_settings['new_siggen_pk2pk'] = settings['new_siggen_pk2pk']
         if 'new_siggen_wave_type' in settings:
             siggen_settings['new_siggen_wave_type'] = settings['new_siggen_wave_type']
-        
+
         success = apply_channel_siggen_settings(siggen_settings, scope)
         if success:
             # Update INITIAL_CONFIG to track current values
@@ -786,8 +763,6 @@ def on_apply_button_clicked():
     # Step 8: Apply streaming restart if needed
     # Trigger enable/disable requires restart because auto_stop parameter must be set when starting streaming
     needs_restart = settings_changed or trigger_changed
-
-    print(f"[DEBUG] Restart needed: {needs_restart} (settings_changed={settings_changed}, trigger_changed={trigger_changed})")
 
     if needs_restart:
         # Set global flag to pause streaming thread
@@ -821,7 +796,7 @@ def on_apply_button_clicked():
                 PRE_TRIGGER_TIME_UNITS = settings['new_pre_trigger_units']
                 POST_TRIGGER_TIME = settings['new_post_trigger_time']
                 POST_TRIGGER_TIME_UNITS = settings['new_post_trigger_units']
-                
+
                 # Update UI spinbox to reflect validated pre-trigger time (may have been auto-adjusted)
                 # This ensures the UI shows the actual value being used
                 pre_trigger_time_spinbox.blockSignals(True)
@@ -836,9 +811,25 @@ def on_apply_button_clicked():
                     if 'new_channel_probe_scale' in settings:
                         INITIAL_CONFIG['channel_probe_scale'] = settings['new_channel_probe_scale']
                 TRIGGER_ENABLED = settings['new_trigger_enabled']
-                TRIGGER_THRESHOLD_ADC = settings['new_trigger_threshold']
                 TRIGGER_DIRECTION = settings['new_trigger_direction']
                 trigger_fired = False  # Reset trigger fired flag on successful restart
+
+                # Check if mode changed (which affects trigger threshold datatype)
+                old_mode = settings.get('current_mode', DOWNSAMPLING_MODE)
+                new_mode = settings['new_mode']
+                mode_changed = (old_mode != new_mode)
+
+                # Determine if new mode is INT8 (DECIMATE) or INT16 (AVERAGE)
+                is_int8_mode = (new_mode != psdk.RATIO_MODE.AVERAGE)
+
+                if mode_changed:
+                    # Mode changed - reset trigger threshold to 0 and update spinbox range
+                    TRIGGER_THRESHOLD_ADC = 0
+                    update_trigger_threshold_range(trigger_threshold_spinbox, is_int8_mode, reset_to_zero=True)
+                    print(f"[TRIGGER] Mode changed: trigger threshold reset to 0, range updated for {'INT8' if is_int8_mode else 'INT16'}")
+                else:
+                    # Mode didn't change - keep user's threshold value
+                    TRIGGER_THRESHOLD_ADC = settings['new_trigger_threshold']
                 hardware_adc_sample_rate = new_rate
                 PYTHON_RING_BUFFER = new_ring_buffer
 
@@ -854,11 +845,11 @@ def on_apply_button_clicked():
                 else:
                     print(f"[PERIODIC LOG] Logging disabled (enabled={PERIODIC_LOG_ENABLED}, file={PERIODIC_LOG_FILE})")
 
-                # Recalculate time conversion factor with new hardware rate
-                # This is only done when settings change, not on every plot update
-                global time_conversion_factor
-                time_conversion_factor = 1.0 / new_rate if new_rate > 0 else None
-                print(f"[SETTINGS] Time conversion factor recalculated: {time_conversion_factor:.12e} s/sample (1 / {new_rate:.2f} Hz)")
+                # Update time axis with new sample rate
+                # The axis handles conversion from sample indices to time for display
+                time_axis.set_sample_rate(new_rate)
+                print(f"[SETTINGS] Time axis sample rate updated: {new_rate:.2f} Hz")
+
                 # Update ring buffer arrays (critical - must update global references)
                 data_array = new_data_array
                 x_data = new_x_data
@@ -868,13 +859,12 @@ def on_apply_button_clicked():
                 buffer_0 = new_buffer_0
                 buffer_1 = new_buffer_1
 
-                # Update X-range to match new time window (now in time, not samples)
-                # X-axis is now time-based (seconds), so range is simply 0 to time_window
-                # Y-axis remains fixed (ADC counts), selection window unaffected
+                # Update X-range to match new time window (in sample index space)
+                # TimeAxisItem converts sample indices to time for display
                 new_time_window = settings['new_time_window']
-                plot.setXRange(0, new_time_window, padding=0)
-                print(f"[SETTINGS] X-axis range updated to time-based: 0 to {new_time_window:.3f} seconds")
-                print(f"[SETTINGS] Time series will be recalculated based on actual hardware ADC rate: {new_rate:.2f} Hz")
+                new_max_sample_index = time_window_to_samples(new_time_window, new_rate, DOWNSAMPLING_RATIO)
+                plot.setXRange(0, new_max_sample_index, padding=0)
+                print(f"[SETTINGS] X-axis range updated: 0 to {new_max_sample_index:,} samples ({new_time_window:.3f} seconds at {new_rate:.2f} Hz)")
         finally:
             # Always clear the flag and signal the thread to resume
             settings_update_in_progress = False
@@ -893,7 +883,7 @@ def on_stop_button_clicked():
       with current settings but with trigger disabled.
     """
     global stop_streaming, streaming_stopped, trigger_fired
-    global TRIGGER_ENABLED, hardware_adc_sample_rate, time_conversion_factor
+    global TRIGGER_ENABLED, hardware_adc_sample_rate
     global ring_head, ring_filled, data_array
 
     if not streaming_stopped:
@@ -916,33 +906,25 @@ def on_stop_button_clicked():
         if trigger_fired:
             print("\n[RESTART] User requested restart after trigger - restarting without trigger...")
             try:
-                # DEBUG: Check if scope handle is still valid
+                # Check if scope handle is still valid (may be invalid after RAW mode get_values)
+                # TODO: Investigate why get_values() in RAW mode invalidates the device handle.
+                #       Current workaround is to re-open the device and restore settings.
                 handle_valid = False
                 device_reopened = False
                 try:
                     unit_serial = scope.get_unit_serial()
-                    print(f"[RESTART DEBUG] Scope handle is valid - Connected to: {unit_serial}")
                     handle_valid = True
                 except Exception as e:
-                    print(f"[RESTART DEBUG ERROR] Scope handle check failed: {e}")
-                    print(f"[RESTART DEBUG ERROR] Attempting to re-open device...")
-                    # TODO: Investigate why get_values() in RAW mode requires device re-opening
-                    # The handle becomes invalid after get_values() is called, even though
-                    # the device is still physically connected. This may be due to the SDK
-                    # switching device modes (streaming -> block capture) and not properly
-                    # restoring the handle state. Need to investigate if there's a way to
-                    # restore handle validity without re-opening, or if we need to avoid
-                    # calling get_values() in a way that invalidates the handle.
+                    print(f"[RESTART] Scope handle invalid, attempting to re-open device...")
+                    # Handle becomes invalid after get_values() in RAW mode - re-open required
                     try:
-                        # Re-open the device (this resets all settings, so we need to restore them)
                         scope.open_unit(resolution=psdk.RESOLUTION._8BIT)
                         unit_serial = scope.get_unit_serial()
-                        print(f"[RESTART DEBUG] Device re-opened successfully - Connected to: {unit_serial}")
+                        print(f"[RESTART] Device re-opened successfully - Connected to: {unit_serial}")
                         device_reopened = True
                         handle_valid = True
 
                         # Restore device settings that were lost during re-open
-                        # Use current configuration values instead of hardcoded defaults
                         print("[RESTART] Restoring device settings after re-open...")
                         scope.set_siggen(
                             frequency=INITIAL_CONFIG['siggen_frequency'],
@@ -957,7 +939,7 @@ def on_stop_button_clicked():
                         )
                         print("[RESTART] Device settings restored from INITIAL_CONFIG (siggen and channel)")
                     except Exception as reopen_error:
-                        print(f"[RESTART DEBUG ERROR] Failed to re-open device: {reopen_error}")
+                        print(f"[RESTART ERROR] Failed to re-open device: {reopen_error}")
                         print(f"[RESTART ERROR] Cannot restart - device handle is invalid and cannot be restored")
                         return
 
@@ -1015,11 +997,15 @@ def on_stop_button_clicked():
 
                 # Re-register streaming buffers (device needs to be back in streaming mode)
                 # This is critical: after get_values() in RAW mode, we must re-register streaming buffers
-                print(f"[RESTART] Re-registering streaming buffers ({SAMPLES_PER_BUFFER:,} samples, {DOWNSAMPLING_MODE} mode)...")
-                register_double_buffers(scope, buffer_0, buffer_1, SAMPLES_PER_BUFFER, ADC_DATA_TYPE, DOWNSAMPLING_MODE)
+                # Get correct datatype for current mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
+                current_adc_data_type, _ = get_datatype_for_mode(DOWNSAMPLING_MODE)
+                is_int8_mode = (current_adc_data_type == psdk.DATA_TYPE.INT8_T)
+                dtype_name = "INT16_T" if current_adc_data_type == psdk.DATA_TYPE.INT16_T else "INT8_T"
+                print(f"[RESTART] Re-registering streaming buffers ({SAMPLES_PER_BUFFER:,} samples, {DOWNSAMPLING_MODE} mode, datatype={dtype_name})...")
+                register_double_buffers(scope, buffer_0, buffer_1, SAMPLES_PER_BUFFER, current_adc_data_type, DOWNSAMPLING_MODE)
 
-                # Configure trigger as disabled
-                configure_default_trigger(scope, TRIGGER_ENABLED, TRIGGER_THRESHOLD_ADC, TRIGGER_DIRECTION)
+                # Configure trigger with correct mode for ADC scaling
+                configure_default_trigger(scope, TRIGGER_ENABLED, TRIGGER_THRESHOLD_ADC, TRIGGER_DIRECTION, is_int8_mode)
 
                 # Get actual sample interval BEFORE starting streaming
                 # This ensures we know the actual rate before configuring post-trigger samples
@@ -1028,15 +1014,16 @@ def on_stop_button_clicked():
                 nearest_interval_dict = scope.get_nearest_sampling_interval(requested_interval_s)
                 actual_interval_s = nearest_interval_dict['actual_sample_interval']
                 actual_interval = actual_interval_s / unit_to_seconds  # Convert back to original units
-                
+
                 # Calculate actual sample rate
                 sample_rate = calculate_sample_rate(actual_interval, time_units)
                 hardware_adc_sample_rate = sample_rate
-                time_conversion_factor = 1.0 / hardware_adc_sample_rate if hardware_adc_sample_rate > 0 else None
+                # Update time axis with new sample rate
+                time_axis.set_sample_rate(hardware_adc_sample_rate)
                 print(f"[RESTART] Actual sample interval: {actual_interval} {time_units}")
                 print(f"[RESTART] Sample rate: {sample_rate:.2f} Hz")
-                print(f"[RESTART] Time conversion factor: {time_conversion_factor:.12e} s/sample")
-                
+                print(f"[RESTART] Time axis sample rate updated: {hardware_adc_sample_rate:.2f} Hz")
+
                 # Reset post-trigger samples to initial value when restarting without trigger
                 # When trigger is disabled, maxPostTriggerSamples is used as "maximum samples to store"
                 # We should reset to initial value (1.0 ms) to avoid memory issues from previous triggered runs
@@ -1049,13 +1036,13 @@ def on_stop_button_clicked():
                     POST_TRIGGER_TIME = initial_post_trigger_time
                     POST_TRIGGER_TIME_UNITS = initial_post_trigger_units
                     print(f"[RESTART] Reset post-trigger to initial value: {initial_post_trigger_time} {TIME_UNIT_NAMES.get(initial_post_trigger_units, '?')} = {MAX_POST_TRIGGER_SAMPLES:,} samples (at {sample_rate/1e6:.3f} MSPS)")
-                    
+
                     # Also reset pre-trigger to initial value (0.0 ms = 0 samples)
                     initial_pre_trigger_time = INITIAL_CONFIG['pre_trigger_time']  # 0.0 ms
                     initial_pre_trigger_units = INITIAL_CONFIG['pre_trigger_time_units']  # TIME_UNIT.MS
                     MAX_PRE_TRIGGER_SAMPLES = time_to_samples(initial_pre_trigger_time, initial_pre_trigger_units, sample_rate)
                     print(f"[RESTART] Reset pre-trigger to initial value: {initial_pre_trigger_time} {TIME_UNIT_NAMES.get(initial_pre_trigger_units, '?')} = {MAX_PRE_TRIGGER_SAMPLES:,} samples")
-                
+
                 # Update status bar displays BEFORE starting streaming
                 try:
                     adc_msps = sample_rate / 1_000_000
@@ -1073,18 +1060,16 @@ def on_stop_button_clicked():
                     print(f"[RESTART WARNING] Failed to update status displays: {e}")
 
                 # NOW start hardware streaming (LAST, after all settings are configured)
-                print("[RESTART] Starting hardware streaming with trigger disabled...")
-                actual_interval = start_hardware_streaming(
-                    scope,
-                    sample_interval,
-                    time_units,
-                    MAX_PRE_TRIGGER_SAMPLES,
-                    MAX_POST_TRIGGER_SAMPLES,
-                    DOWNSAMPLING_RATIO,
-                    DOWNSAMPLING_MODE,
-                    TRIGGER_ENABLED
+                _, _ = start_streaming(
+                    scope=scope,
+                    sample_interval=sample_interval,
+                    time_units=time_units,
+                    max_pre_trigger=MAX_PRE_TRIGGER_SAMPLES,
+                    max_post_trigger=MAX_POST_TRIGGER_SAMPLES,
+                    trigger_enabled=TRIGGER_ENABLED,
+                    ratio=DOWNSAMPLING_RATIO,
+                    ratio_mode=DOWNSAMPLING_MODE
                 )
-                print(f"[RESTART] Hardware streaming started successfully")
 
                 # Update plot title and stop button UI
                 plot_signal.title_updated.emit(
@@ -1114,14 +1099,29 @@ def on_stop_button_clicked():
 apply_button.clicked.connect(on_apply_button_clicked)
 stop_button.clicked.connect(on_stop_button_clicked)
 
-# Create plot item with performance optimizations
-plot = win.addPlot(title=f"Real-time Streaming Data - {DOWNSAMPLING_RATIO}:1 {mode_combo.currentText()} - Initializing...")
+# Create custom time axis that displays sample indices as time
+# This keeps internal data as integers (exact) while showing time on the axis
+time_axis = TimeAxisItem(orientation='bottom')
+time_axis.set_sample_rate(hardware_adc_sample_rate)
+
+# Create plot item with custom time axis
+plot = win.addPlot(
+    title=f"Real-time Streaming Data - {DOWNSAMPLING_RATIO}:1 {mode_combo.currentText()} - Initializing...",
+    axisItems={'bottom': time_axis}
+)
 plot.setLabel('left', 'Amplitude', units='ADC Counts')
 plot.setLabel('bottom', 'Time', units='s')
 plot.showGrid(x=True, y=True, alpha=0.3)
 
+# Calculate initial x-range in sample space
+# max_sample_index = time_window * sample_rate
+initial_max_sample_index = time_window_to_samples(TARGET_TIME_WINDOW, hardware_adc_sample_rate, DOWNSAMPLING_RATIO)
+
 # Setup plot optimizations using helper function
-data_processing.setup_plot_optimizations(plot, TARGET_TIME_WINDOW, hardware_adc_sample_rate, scope=scope, datatype=ADC_DATA_TYPE)
+# Use the correct datatype for the initial mode (not the hardcoded ADC_DATA_TYPE constant)
+# This ensures Y-axis is set correctly for AVERAGE mode (INT16_T) vs DECIMATE mode (INT8_T)
+initial_adc_data_type, _ = get_datatype_for_mode(INITIAL_CONFIG['downsampling_mode'])
+data_processing.setup_plot_optimizations(plot, initial_max_sample_index, scope=scope, datatype=initial_adc_data_type)
 
 # Create plot curves using helper functions
 curve = data_processing.create_plot_curve(plot, ANTIALIAS)
@@ -1200,13 +1200,13 @@ print(f"Initial ring buffer size: {PYTHON_RING_BUFFER:,} downsampled samples")
 print(f"  Time window: {TARGET_TIME_WINDOW:.1f}s, ADC rate: {hardware_adc_sample_rate:.2f} Hz, Ratio: {DOWNSAMPLING_RATIO}:1")
 
 # Pre-allocate arrays
-x_data = np.arange(PYTHON_RING_BUFFER, dtype=np.float32)           # X-axis sample indices
+# Note: x_data is kept for backward compatibility with ui_helpers but is no longer used for plotting.
+# update_plot now generates integer sample indices on-the-fly; TimeAxisItem converts to time for display.
+x_data = None  # Placeholder - x values are generated on-the-fly in update_plot
 data_array = np.zeros(PYTHON_RING_BUFFER, dtype=np.float32)       # Y-axis data circular buffer
 # Ring buffer state
 ring_head = 0                    # Next write index (0..PYTHON_RING_BUFFER-1)
 ring_filled = 0                  # Number of valid samples in buffer (<= PYTHON_RING_BUFFER)
-
-# Note: time_conversion_factor is initialized above after hardware_adc_sample_rate is known
 
 # Threading and synchronization variables
 current_buffer_index = 0       # Active hardware buffer index
@@ -1491,10 +1491,12 @@ def streaming_thread(hardware_adc_rate):
                 continue
 
             # Poll hardware for accumulated samples (downsampled mode)
+            # Get correct datatype for current mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
+            current_adc_data_type, _ = get_datatype_for_mode(DOWNSAMPLING_MODE)
             info = scope.get_streaming_latest_values(
                 channel=psdk.CHANNEL.A,
                 ratio_mode=DOWNSAMPLING_MODE,
-                data_type=ADC_DATA_TYPE
+                data_type=current_adc_data_type
             )
 
             n_samples = info['no of samples']
@@ -1670,8 +1672,10 @@ def streaming_thread(hardware_adc_rate):
                     new_buffer = buffer_0 if new_buffer_index == 0 else buffer_1
 
                     # Re-register buffer (single buffer for switching)
+                    # Get correct datatype for current mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
+                    current_adc_data_type, _ = get_datatype_for_mode(DOWNSAMPLING_MODE)
                     scope.set_data_buffer(psdk.CHANNEL.A, SAMPLES_PER_BUFFER, buffer=new_buffer,
-                                        action=psdk.ACTION.ADD, datatype=ADC_DATA_TYPE, ratio_mode=DOWNSAMPLING_MODE)
+                                        action=psdk.ACTION.ADD, datatype=current_adc_data_type, ratio_mode=DOWNSAMPLING_MODE)
 
             time.sleep(POLLING_INTERVAL)
 
@@ -1682,18 +1686,13 @@ def streaming_thread(hardware_adc_rate):
     # Handle streaming stopped by user (Option A: Clean Stop - drain buffers)
     if streaming_stopped:
         # Use centralized buffer draining function
+        # Get correct datatype for current mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
+        current_adc_data_type, _ = get_datatype_for_mode(DOWNSAMPLING_MODE)
         total_drained, ring_head, ring_filled = drain_remaining_buffers(
             scope, buffer_0, buffer_1, data_array, ring_head, ring_filled,
-            PYTHON_RING_BUFFER, data_lock, plot_signal, DOWNSAMPLING_MODE, ADC_DATA_TYPE
+            PYTHON_RING_BUFFER, data_lock, plot_signal, DOWNSAMPLING_MODE, current_adc_data_type
         )
         # Note: ring_head and ring_filled are updated from return values
-
-        # DEBUG: Check handle validity after drain completes
-        try:
-            unit_serial = scope.get_unit_serial()
-            print(f"[STREAMING THREAD DEBUG] Handle valid after drain - Connected to: {unit_serial}")
-        except Exception as e:
-            print(f"[STREAMING THREAD DEBUG ERROR] Handle invalid after drain: {e}")
 
     print("Data acquisition thread stopped")
 
@@ -1704,13 +1703,14 @@ def streaming_thread(hardware_adc_rate):
 def update_plot():
     """
     Update the PyQtGraph plot with latest streaming data.
+    X-values are sample indices; TimeAxisItem handles time conversion for display.
     """
-    global data_updated, perf_plot_last_time, perf_plot_fps, time_conversion_factor
+    global data_updated, perf_plot_last_time, perf_plot_fps
 
-    # Use helper function to update plot with cached time conversion factor
-    # Factor is only recalculated when settings change, not on every plot update
+    # Use helper function to update plot with integer sample indices
+    # TimeAxisItem on the plot handles conversion to time for display
     plot_updated = data_processing.update_plot(curve, data_array, ring_head, ring_filled, PYTHON_RING_BUFFER,
-                              DOWNSAMPLING_RATIO, data_lock, data_updated, time_conversion_factor)
+                              DOWNSAMPLING_RATIO, data_lock, data_updated)
 
     if plot_updated:
         # Update plot FPS timing (overlay removed to reduce UI overhead)
@@ -1762,13 +1762,6 @@ def on_trigger_fired(trigger_at):
     global streaming_stopped
     print(f"[UI] Trigger fired - updating stop button to 'Restart' state")
 
-    # DEBUG: Check handle validity immediately when trigger fires
-    try:
-        unit_serial = scope.get_unit_serial()
-        print(f"[TRIGGER DEBUG] Handle valid when trigger fired - Connected to: {unit_serial}")
-    except Exception as e:
-        print(f"[TRIGGER DEBUG ERROR] Handle invalid when trigger fired: {e}")
-
     try:
         # Update stop button to show restart state (user can restart streaming)
         stop_button.setText('Restart')
@@ -1801,23 +1794,8 @@ def on_pull_raw_samples_clicked():
         print("[ERROR] Cannot pull raw samples - trigger has not fired")
         return
 
-    # DEBUG: Check handle validity BEFORE raw pull
-    try:
-        unit_serial = scope.get_unit_serial()
-        print(f"[RAW PULL DEBUG] Handle valid BEFORE pull - Connected to: {unit_serial}")
-    except Exception as e:
-        print(f"[RAW PULL DEBUG ERROR] Handle invalid BEFORE pull: {e}")
-
     print(f"\n[RAW SAMPLES] Pulling raw samples from device memory...")
     print(f"[RAW SAMPLES] Trigger occurred at sample {trigger_at_sample:,} (downsampled space)")
-
-    # DEBUG: Check handle validity BEFORE raw pull operations
-    try:
-        unit_serial = scope.get_unit_serial()
-        print(f"[RAW PULL DEBUG] Handle valid BEFORE pull - Connected to: {unit_serial}")
-    except Exception as e:
-        print(f"[RAW PULL DEBUG ERROR] Handle invalid BEFORE pull: {e}")
-        return
 
     try:
         # Get max available memory first
@@ -1827,25 +1805,25 @@ def on_pull_raw_samples_clicked():
         # This ensures we use the validated value (which may have been auto-adjusted to minimum)
         # rather than recalculating from the spinbox which might not reflect the validated value
         old_max_pre_trigger = MAX_PRE_TRIGGER_SAMPLES
-        
+
         # Validate that current pre-trigger meets minimum requirement based on poll interval
         # Minimum pre-trigger must be at least one poll interval worth of samples
         poll_interval_seconds = POLLING_INTERVAL
         min_pre_trigger_samples = int(poll_interval_seconds * hardware_adc_sample_rate)
-        
+
         if MAX_PRE_TRIGGER_SAMPLES < min_pre_trigger_samples:
             print(f"[RAW SAMPLES] Current pre-trigger ({MAX_PRE_TRIGGER_SAMPLES:,}) is less than minimum ({min_pre_trigger_samples:,})")
             print(f"[RAW SAMPLES]   Minimum based on poll interval ({poll_interval_seconds*1000:.2f} ms) and sample rate ({hardware_adc_sample_rate/1e6:.3f} MSPS)")
             print(f"[RAW SAMPLES]   Adjusting to minimum: {min_pre_trigger_samples:,} samples")
             MAX_PRE_TRIGGER_SAMPLES = min_pre_trigger_samples
-        
+
         # Cap pre-trigger to available memory
         max_pre_trigger_allowed = max_available - MAX_POST_TRIGGER_SAMPLES
         if MAX_PRE_TRIGGER_SAMPLES > max_pre_trigger_allowed:
             print(f"[RAW SAMPLES] Pre-trigger ({MAX_PRE_TRIGGER_SAMPLES:,}) exceeds available memory limit ({max_pre_trigger_allowed:,})")
             print(f"[RAW SAMPLES]   Capping to: {max_pre_trigger_allowed:,} samples")
             MAX_PRE_TRIGGER_SAMPLES = max(0, max_pre_trigger_allowed)
-        
+
         if old_max_pre_trigger != MAX_PRE_TRIGGER_SAMPLES:
             print(f"[RAW SAMPLES] MAX_PRE_TRIGGER_SAMPLES: {old_max_pre_trigger:,} -> {MAX_PRE_TRIGGER_SAMPLES:,}")
         else:
@@ -1890,15 +1868,9 @@ def on_pull_raw_samples_clicked():
         print(f"[RAW SAMPLES] Reading {total_raw_samples:,} raw samples (pre={MAX_PRE_TRIGGER_SAMPLES:,} + post={MAX_POST_TRIGGER_SAMPLES:,}, no downsampling)")
 
         # Pull raw samples from device using helper function
-        raw_data, n_raw_samples = pull_raw_samples_from_device(scope, total_raw_samples, ADC_DATA_TYPE)
-
-        # DEBUG: Check handle validity AFTER raw pull (after get_values call)
-        try:
-            unit_serial = scope.get_unit_serial()
-            print(f"[RAW PULL DEBUG] Handle valid AFTER pull - Connected to: {unit_serial}")
-        except Exception as e:
-            print(f"[RAW PULL DEBUG ERROR] Handle invalid AFTER pull: {e}")
-            print(f"[RAW PULL DEBUG ERROR] get_values() may have invalidated the handle!")
+        # Get correct datatype for current mode (AVERAGE requires INT16_T, DECIMATE can use INT8_T)
+        current_adc_data_type, _ = get_datatype_for_mode(DOWNSAMPLING_MODE)
+        raw_data, n_raw_samples = pull_raw_samples_from_device(scope, total_raw_samples, current_adc_data_type)
 
         if raw_data is None or n_raw_samples == 0:
             return
@@ -1906,49 +1878,42 @@ def on_pull_raw_samples_clicked():
         # Get trigger position from device using helper function
         triggered_at_raw = get_trigger_position_from_device(scope, trigger_at_sample, DOWNSAMPLING_RATIO)
 
-        # Calculate time alignment using helper function
+        # Calculate sample index alignment using helper function
+        # Returns integer sample indices; TimeAxisItem handles time conversion for display
         with data_lock:
             current_ring_filled = ring_filled
 
         raw_x_data, raw_end_pos, raw_start_pos = calculate_raw_data_time_alignment(
-            current_ring_filled, DOWNSAMPLING_RATIO, trigger_at_sample, n_raw_samples,
-            hardware_adc_sample_rate
+            current_ring_filled, DOWNSAMPLING_RATIO, trigger_at_sample, n_raw_samples
         )
 
-        # Print alignment details
-        print(f"[RAW SAMPLES] Time alignment:")
-        print(f"  Downsampled trace end position: {raw_end_pos:,.0f} (ring_filled={current_ring_filled:,} * ratio={DOWNSAMPLING_RATIO})")
+        # Print alignment details (x-axis is now sample indices)
+        print(f"[RAW SAMPLES] Sample index alignment:")
+        print(f"  Downsampled trace end position: {raw_end_pos:,} (ring_filled={current_ring_filled:,} * ratio={DOWNSAMPLING_RATIO})")
         print(f"  Trigger at downsampled sample: {trigger_at_sample:,}")
         print(f"  Trigger at raw sample: {triggered_at_raw:,}")
         print(f"  MAX_PRE_TRIGGER_SAMPLES: {MAX_PRE_TRIGGER_SAMPLES:,}")
         print(f"  MAX_POST_TRIGGER_SAMPLES: {MAX_POST_TRIGGER_SAMPLES:,}")
         print(f"  Expected total raw length: {MAX_POST_TRIGGER_SAMPLES + MAX_PRE_TRIGGER_SAMPLES:,} (pre + post)")
         print(f"  Raw data samples retrieved: {n_raw_samples:,} (requested: {total_raw_samples:,})")
-        print(f"  Raw trace end position: {raw_end_pos:,.0f} samples (matches downsampled trace end)")
-        print(f"  Raw trace start position: {raw_start_pos:,.0f} samples")
-        if hardware_adc_sample_rate is not None and hardware_adc_sample_rate > 0:
-            # Time-based x-axis
-            print(f"  Raw data x-axis range: {raw_x_data[0]:.9f} to {raw_x_data[-1]:.9f} seconds")
-            time_span = raw_x_data[-1] - raw_x_data[0]
-            expected_time_span = (n_raw_samples - 1) / hardware_adc_sample_rate
+        print(f"  Raw trace end position: {raw_end_pos:,} samples (matches downsampled trace end)")
+        print(f"  Raw trace start position: {raw_start_pos:,} samples")
+        print(f"  Raw data x-axis range: {raw_x_data[0]:,} to {raw_x_data[-1]:,} samples")
+        # Convert to time for informational display
+        if hardware_adc_sample_rate > 0:
+            time_start = raw_x_data[0] / hardware_adc_sample_rate
+            time_end = raw_x_data[-1] / hardware_adc_sample_rate
+            time_span = time_end - time_start
             time_per_sample = 1.0 / hardware_adc_sample_rate
-            print(f"  Raw trace spans: {time_span:.9f} seconds ({n_raw_samples:,} samples)")
-            print(f"  Expected time span: {expected_time_span:.9f} seconds")
+            print(f"  Raw trace time span: {time_start:.9f} to {time_end:.9f} s ({time_span:.9f} s)")
             print(f"  Time per raw sample: {time_per_sample:.12e} seconds (1 / {hardware_adc_sample_rate:.2f} Hz)")
-            # Check for duplicate time values (would indicate calculation error)
+            # Verify sample spacing is correct (should all be 1)
             if len(raw_x_data) > 1:
-                time_diffs = np.diff(raw_x_data)
-                min_diff = np.min(time_diffs)
-                max_diff = np.max(time_diffs)
-                expected_diff = time_per_sample
-                if min_diff < expected_diff * 0.99 or max_diff > expected_diff * 1.01:
-                    print(f"  [WARNING] Time spacing inconsistent! Min diff: {min_diff:.12e}, Max diff: {max_diff:.12e}, Expected: {expected_diff:.12e}")
+                sample_diffs = np.diff(raw_x_data)
+                if np.all(sample_diffs == 1):
+                    print(f"  [OK] Sample spacing correct: 1 sample between each point")
                 else:
-                    print(f"  [OK] Time spacing correct: {min_diff:.12e} seconds between samples")
-        else:
-            # Sample-based x-axis
-            print(f"  Raw data x-axis range: {raw_x_data[0]:,.0f} to {raw_x_data[-1]:,.0f} samples")
-            print(f"  Raw trace spans: {n_raw_samples:,} samples")
+                    print(f"  [WARNING] Sample spacing inconsistent! Min: {np.min(sample_diffs)}, Max: {np.max(sample_diffs)}")
 
         # Apply PyQtGraph downsampling settings if enabled
         enabled = raw_display_enable_checkbox.isChecked()
@@ -2010,14 +1975,17 @@ def on_pull_raw_samples_clicked():
         # Auto-range X-axis to fit the red trace (raw data), but keep Y-axis fixed
         # This provides "view all" functionality specifically for the raw data on X-axis only
         vb = plot.getViewBox()
-        # Get X bounds from raw data and set X-range manually (Y-axis stays fixed)
+        # Get X bounds from raw data (sample indices) and set X-range manually (Y-axis stays fixed)
         if len(raw_full_x_data) > 0:
-            x_min = float(raw_full_x_data[0])
-            x_max = float(raw_full_x_data[-1])
-            # Add small padding for visibility
-            x_padding = (x_max - x_min) * 0.02  # 2% padding
+            x_min = int(raw_full_x_data[0])
+            x_max = int(raw_full_x_data[-1])
+            # Add small padding for visibility (in sample space)
+            x_padding = int((x_max - x_min) * 0.02)  # 2% padding
             plot.setXRange(x_min - x_padding, x_max + x_padding, padding=0)
-            print(f"[RAW SAMPLES] X-axis set to fit raw data: {x_min:.6f} to {x_max:.6f} seconds")
+            # Convert to time for display in log
+            x_min_time = x_min / hardware_adc_sample_rate if hardware_adc_sample_rate > 0 else 0
+            x_max_time = x_max / hardware_adc_sample_rate if hardware_adc_sample_rate > 0 else 0
+            print(f"[RAW SAMPLES] X-axis set to fit raw data: samples {x_min:,} to {x_max:,} ({x_min_time:.6f} to {x_max_time:.6f} s)")
         # Note: Y-axis limits are set once during initialization and don't need to be updated
         # ADC limits are hardware-dependent and don't change during runtime
 

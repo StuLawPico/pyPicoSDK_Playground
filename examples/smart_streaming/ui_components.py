@@ -8,6 +8,17 @@ separated from the main application logic for better organization.
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtCore
 
+# Import shared constants from hardware_helpers
+from hardware_helpers import TIME_UNIT_TO_SECONDS
+
+
+# ============================================================================
+# UI CONSTANTS
+# ============================================================================
+
+# Tooltip hint for scroll wheel adjustment (used in spinbox tooltips)
+SCROLL_HINT_TEXT = "Hover and scroll to adjust • Ctrl+scroll for faster"
+
 
 # ============================================================================
 # UI STYLE CONSTANTS
@@ -258,6 +269,92 @@ STYLES = {
             font-size: 9pt;
             color: #ffffff;
         }
+    """,
+    
+    # Checkbox styles - standard (11px font)
+    'checkbox': """
+        QCheckBox {
+            color: white;
+            font-size: 11px;
+            padding: 2px;
+        }
+        QCheckBox::indicator {
+            width: 14px;
+            height: 14px;
+            border: 1px solid #555555;
+            background-color: #2a2a2a;
+            border-radius: 3px;
+        }
+        QCheckBox::indicator:checked {
+            background-color: #4444ff;
+            border-color: #5555ff;
+        }
+    """,
+    
+    # Checkbox styles - small (10px font)
+    'checkbox_small': """
+        QCheckBox {
+            color: white;
+            font-size: 10px;
+            padding: 1px;
+        }
+        QCheckBox::indicator {
+            width: 14px;
+            height: 14px;
+        }
+        QCheckBox::indicator:unchecked {
+            background-color: #333333;
+            border: 1px solid #666666;
+        }
+        QCheckBox::indicator:checked {
+            background-color: #4CAF50;
+            border: 1px solid #4CAF50;
+        }
+    """,
+    
+    # Checkbox styles - bold (11px font, bold, larger indicator)
+    'checkbox_bold': """
+        QCheckBox {
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px;
+        }
+        QCheckBox::indicator {
+            width: 16px;
+            height: 16px;
+        }
+        QCheckBox::indicator:unchecked {
+            background-color: #333333;
+            border: 1px solid #666666;
+        }
+        QCheckBox::indicator:checked {
+            background-color: #4CAF50;
+            border: 1px solid #4CAF50;
+        }
+    """,
+    
+    # Checkbox styles - blue checked (for logging enable)
+    'checkbox_blue': """
+        QCheckBox {
+            color: white;
+            font-size: 11px;
+            padding: 2px;
+        }
+        QCheckBox::indicator {
+            width: 14px;
+            height: 14px;
+            border: 1px solid #555555;
+            background-color: #2a2a2a;
+            border-radius: 3px;
+        }
+        QCheckBox::indicator:checked {
+            background-color: #2674f0;
+            border: 1px solid #3b84ff;
+        }
+        QCheckBox::indicator:hover {
+            border: 1px solid #666666;
+        }
     """
 }
 
@@ -326,6 +423,19 @@ def make_scroll_hint_label():
     return hint_label
 
 
+def configure_modern_spinbox(spinbox):
+    """
+    Apply modern styling to a spinbox (no buttons, no frame, scroll wheel enabled).
+    
+    Args:
+        spinbox: QSpinBox or QDoubleSpinBox widget to configure
+    """
+    spinbox.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
+    ButtonSymbols = pg.QtWidgets.QAbstractSpinBox.ButtonSymbols
+    spinbox.setButtonSymbols(ButtonSymbols.NoButtons)
+    spinbox.setFrame(False)
+
+
 def create_spinbox_with_style(min_val, max_val, current_val, style='dark_spinbox', step=1, tooltip=None):
     """
     Create a standardized spinbox with consistent styling.
@@ -345,20 +455,14 @@ def create_spinbox_with_style(min_val, max_val, current_val, style='dark_spinbox
     spinbox.setRange(min_val, max_val)
     spinbox.setSingleStep(step)
     spinbox.setValue(current_val)
-    # Enable scroll wheel adjustment when focused
-    spinbox.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-    # Modern styling: no buttons, no frame
-    ButtonSymbols = pg.QtWidgets.QAbstractSpinBox.ButtonSymbols
-    spinbox.setButtonSymbols(ButtonSymbols.NoButtons)
-    spinbox.setFrame(False)
+    configure_modern_spinbox(spinbox)
     spinbox.setStyleSheet(STYLES[style])
     
     # Enhanced tooltip with scroll wheel instructions
-    scroll_hint = "Hover and scroll to adjust • Ctrl+scroll for faster"
     if tooltip:
-        enhanced_tooltip = f"{tooltip}\n\n{scroll_hint}"
+        enhanced_tooltip = f"{tooltip}\n\n{SCROLL_HINT_TEXT}"
     else:
-        enhanced_tooltip = scroll_hint
+        enhanced_tooltip = SCROLL_HINT_TEXT
     spinbox.setToolTip(enhanced_tooltip)
     
     return spinbox
@@ -393,35 +497,20 @@ def create_slider_spinbox_combo(min_val, max_val, current_val, step=1, suffix=''
     spinbox.setRange(min_val, max_val)
     spinbox.setSingleStep(step)
     spinbox.setValue(current_val)
-    # Enable scroll wheel adjustment when focused
-    spinbox.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-    # Hide spinbox buttons for modern look (Qt6)
-    ButtonSymbols = pg.QtWidgets.QAbstractSpinBox.ButtonSymbols
-    spinbox.setButtonSymbols(ButtonSymbols.NoButtons)
-    spinbox.setFrame(False)
+    configure_modern_spinbox(spinbox)
     spinbox.setStyleSheet(STYLES['dark_spinbox'])
     if suffix:
         spinbox.setSuffix(suffix)
     
     # Enhanced tooltip with scroll wheel instructions
-    scroll_hint = "Hover and scroll to adjust • Ctrl+scroll for faster"
     if tooltip:
-        enhanced_tooltip = f"{tooltip}\n\n{scroll_hint}"
+        enhanced_tooltip = f"{tooltip}\n\n{SCROLL_HINT_TEXT}"
     else:
-        enhanced_tooltip = scroll_hint
+        enhanced_tooltip = SCROLL_HINT_TEXT
     spinbox.setToolTip(enhanced_tooltip)
     
     # Add subtle hint label
-    hint_label = pg.QtWidgets.QLabel("scroll to adjust")
-    hint_label.setStyleSheet("""
-        QLabel {
-            color: #888888;
-            font-size: 9px;
-            font-style: italic;
-            padding: 0px;
-            margin: 0px;
-        }
-    """)
+    hint_label = make_scroll_hint_label()
     
     # Create a placeholder object for backward compatibility (for setEnabled calls)
     class SliderPlaceholder:
@@ -459,22 +548,16 @@ def create_double_spinbox_with_style(min_val, max_val, current_val, decimals=2, 
     spinbox.setDecimals(decimals)
     spinbox.setSingleStep(step)
     spinbox.setValue(current_val)
-    # Enable scroll wheel adjustment when focused
-    spinbox.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-    # Modern styling: no buttons, no frame
-    ButtonSymbols = pg.QtWidgets.QAbstractSpinBox.ButtonSymbols
-    spinbox.setButtonSymbols(ButtonSymbols.NoButtons)
-    spinbox.setFrame(False)
+    configure_modern_spinbox(spinbox)
     if suffix:
         spinbox.setSuffix(suffix)
     spinbox.setStyleSheet(STYLES['dark_double_spinbox'])
     
     # Enhanced tooltip with scroll wheel instructions
-    scroll_hint = "Hover and scroll to adjust • Ctrl+scroll for faster"
     if tooltip:
-        enhanced_tooltip = f"{tooltip}\n\n{scroll_hint}"
+        enhanced_tooltip = f"{tooltip}\n\n{SCROLL_HINT_TEXT}"
     else:
-        enhanced_tooltip = scroll_hint
+        enhanced_tooltip = SCROLL_HINT_TEXT
     spinbox.setToolTip(enhanced_tooltip)
     
     return spinbox
@@ -848,20 +931,14 @@ def create_time_window_spinbox(current_time_window):
     time_window_spinbox.setSingleStep(0.01)  # 10ms steps
     time_window_spinbox.setValue(current_time_window)
     time_window_spinbox.setSuffix(' s')
-    # Enable scroll wheel adjustment when focused
-    time_window_spinbox.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-    # Modern styling: no buttons, no frame
-    ButtonSymbols = pg.QtWidgets.QAbstractSpinBox.ButtonSymbols
-    time_window_spinbox.setButtonSymbols(ButtonSymbols.NoButtons)
-    time_window_spinbox.setFrame(False)
+    configure_modern_spinbox(time_window_spinbox)
     time_window_spinbox.setStyleSheet(STYLES['dark_double_spinbox'])
     
     # Enhanced tooltip with scroll wheel instructions
-    scroll_hint = "Hover and scroll to adjust • Ctrl+scroll for faster"
     tooltip = (
         'Adjust the time span of data visible in the plot (10ms to 1s).\n'
         'Changes apply when you click "Apply Changes".\n\n'
-        f'{scroll_hint}'
+        f'{SCROLL_HINT_TEXT}'
     )
     time_window_spinbox.setToolTip(tooltip)
     
@@ -944,24 +1021,7 @@ def create_raw_data_display_controls(enabled=False, mode='mean', factor=1, max_p
     # Enable/Disable checkbox
     enable_checkbox = pg.QtWidgets.QCheckBox("Enable PyQtGraph Downsampling")
     enable_checkbox.setChecked(enabled)
-    enable_checkbox.setStyleSheet("""
-        QCheckBox {
-            color: white;
-            font-size: 11px;
-            padding: 2px;
-        }
-        QCheckBox::indicator {
-            width: 14px;
-            height: 14px;
-            border: 1px solid #555555;
-            background-color: #2a2a2a;
-            border-radius: 3px;
-        }
-        QCheckBox::indicator:checked {
-            background-color: #4444ff;
-            border-color: #5555ff;
-        }
-    """)
+    enable_checkbox.setStyleSheet(STYLES['checkbox'])
     enable_checkbox.setToolTip(
         'Enable PyQtGraph built-in downsampling for raw data visualization.\n'
         'Useful for displaying large raw datasets without performance issues.'
@@ -1015,25 +1075,7 @@ def create_raw_data_display_controls(enabled=False, mode='mean', factor=1, max_p
     # Option: apply PyQtGraph downsampling to gated raw pulls as well
     gated_raw_downsample_checkbox = pg.QtWidgets.QCheckBox("Downsample Gated Raw")
     gated_raw_downsample_checkbox.setChecked(False)
-    gated_raw_downsample_checkbox.setStyleSheet("""
-        QCheckBox {
-            color: white;
-            font-size: 10px;
-            padding: 1px;
-        }
-        QCheckBox::indicator {
-            width: 14px;
-            height: 14px;
-        }
-        QCheckBox::indicator:unchecked {
-            background-color: #333333;
-            border: 1px solid #666666;
-        }
-        QCheckBox::indicator:checked {
-            background-color: #4CAF50;
-            border: 1px solid #4CAF50;
-        }
-    """)
+    gated_raw_downsample_checkbox.setStyleSheet(STYLES['checkbox_small'])
     gated_raw_downsample_checkbox.setToolTip(
         'If enabled, apply the same PyQtGraph downsampling settings to\n'
         'the gated (region-based) raw pull. When disabled, gated raw\n'
@@ -1044,25 +1086,7 @@ def create_raw_data_display_controls(enabled=False, mode='mean', factor=1, max_p
     # Option: enable/disable selection markers (LinearRegionItem)
     region_markers_checkbox = pg.QtWidgets.QCheckBox("Show Selection Markers")
     region_markers_checkbox.setChecked(True)  # Enabled by default
-    region_markers_checkbox.setStyleSheet("""
-        QCheckBox {
-            color: white;
-            font-size: 10px;
-            padding: 1px;
-        }
-        QCheckBox::indicator {
-            width: 14px;
-            height: 14px;
-        }
-        QCheckBox::indicator:unchecked {
-            background-color: #333333;
-            border: 1px solid #666666;
-        }
-        QCheckBox::indicator:checked {
-            background-color: #4CAF50;
-            border: 1px solid #4CAF50;
-        }
-    """)
+    region_markers_checkbox.setStyleSheet(STYLES['checkbox_small'])
     region_markers_checkbox.setToolTip(
         'Show or hide the region selection markers (vertical lines) on the plot.\n'
         'When disabled, the selection region and readout are hidden.'
@@ -1082,10 +1106,54 @@ def create_raw_data_display_controls(enabled=False, mode='mean', factor=1, max_p
     return raw_display_group, enable_checkbox, mode_combo, factor_spinbox, max_points_spinbox, gated_raw_downsample_checkbox, region_markers_checkbox
 
 
+def update_trigger_threshold_range(spinbox, is_int8_mode, reset_to_zero=True):
+    """
+    Update the trigger threshold spinbox range based on current ADC mode.
+    
+    The hardware trigger always uses 16-bit ADC values internally. When in INT8 mode,
+    the UI shows values in the -128 to +127 range which get scaled to 16-bit for hardware.
+    
+    Args:
+        spinbox: The trigger threshold QSpinBox widget
+        is_int8_mode: True if current mode uses INT8 display (-128 to +127),
+                      False if using INT16 display (-32768 to +32767)
+        reset_to_zero: If True, reset the value to 0 after changing range
+    
+    Example:
+        # When switching from DECIMATE (INT8) to AVERAGE (INT16):
+        update_trigger_threshold_range(trigger_spinbox, is_int8_mode=False)
+    """
+    if is_int8_mode:
+        min_val, max_val = -128, 127
+        tooltip = ('Trigger threshold in ADC counts.\n'
+                   'Range: -128 to +127 (INT8 mode: DECIMATE).\n'
+                   '0 = trigger at zero crossing.\n'
+                   'Positive = trigger above zero.\n'
+                   'Negative = trigger below zero.')
+    else:
+        min_val, max_val = -32768, 32767
+        tooltip = ('Trigger threshold in ADC counts.\n'
+                   'Range: -32768 to +32767 (INT16 mode: AVERAGE).\n'
+                   '0 = trigger at zero crossing.\n'
+                   'Positive = trigger above zero.\n'
+                   'Negative = trigger below zero.')
+    
+    # Block signals to prevent triggering value changed events
+    spinbox.blockSignals(True)
+    spinbox.setRange(min_val, max_val)
+    if reset_to_zero:
+        spinbox.setValue(0)
+    spinbox.setToolTip(tooltip)
+    spinbox.blockSignals(False)
+    
+    mode_str = "INT8" if is_int8_mode else "INT16"
+    print(f"[UI] Trigger threshold range updated: {min_val} to {max_val} ({mode_str} mode)")
+
+
 def create_trigger_controls(psdk, current_pre_trigger_time, current_pre_trigger_units, 
                             current_post_trigger_time, current_post_trigger_units,
-                            trigger_enabled=False, trigger_threshold_adc=50, 
-                            hardware_adc_sample_rate=1000000):
+                            trigger_enabled=False, trigger_threshold_adc=0, 
+                            hardware_adc_sample_rate=1000000, is_int8_mode=True):
     """
     Create trigger control widgets with all signal connections set up.
     Returns widgets in a dictionary for easy access and flexible layout arrangement.
@@ -1097,8 +1165,9 @@ def create_trigger_controls(psdk, current_pre_trigger_time, current_pre_trigger_
         current_post_trigger_time: Current post-trigger time value
         current_post_trigger_units: Current post-trigger time units (psdk.TIME_UNIT)
         trigger_enabled: Whether trigger is enabled by default
-        trigger_threshold_adc: Default trigger threshold in ADC counts
+        trigger_threshold_adc: Default trigger threshold in ADC counts (default: 0)
         hardware_adc_sample_rate: Current hardware ADC sample rate (Hz) for validation
+        is_int8_mode: True if using INT8 mode (DECIMATE), False for INT16 (AVERAGE)
     
     Returns:
         dict: Dictionary containing all trigger widgets and handlers:
@@ -1117,26 +1186,7 @@ def create_trigger_controls(psdk, current_pre_trigger_time, current_pre_trigger_
     
     # Trigger Enable/Disable
     trigger_enable_checkbox = pg.QtWidgets.QCheckBox("Enable")
-    trigger_enable_checkbox.setStyleSheet("""
-        QCheckBox {
-            color: white;
-            font-size: 11px;
-            font-weight: bold;
-            padding: 2px;
-        }
-        QCheckBox::indicator {
-            width: 16px;
-            height: 16px;
-        }
-        QCheckBox::indicator:unchecked {
-            background-color: #333333;
-            border: 1px solid #666666;
-        }
-        QCheckBox::indicator:checked {
-            background-color: #4CAF50;
-            border: 1px solid #4CAF50;
-        }
-    """)
+    trigger_enable_checkbox.setStyleSheet(STYLES['checkbox_bold'])
     trigger_enable_checkbox.setChecked(trigger_enabled)
     trigger_enable_checkbox.setToolTip(
         'Enable or disable simple trigger on Channel A.\n'
@@ -1144,13 +1194,25 @@ def create_trigger_controls(psdk, current_pre_trigger_time, current_pre_trigger_
     )
     
     # Trigger Threshold (ADC counts) with slider + spinbox combo
+    # Set initial range based on mode (INT8: -128 to +127, INT16: -32768 to +32767)
+    if is_int8_mode:
+        min_val, max_val = -128, 127
+        tooltip = ('Trigger threshold in ADC counts.\n'
+                   'Range: -128 to +127 (INT8 mode: DECIMATE).\n'
+                   '0 = trigger at zero crossing.\n'
+                   'Positive = trigger above zero.\n'
+                   'Negative = trigger below zero.')
+    else:
+        min_val, max_val = -32768, 32767
+        tooltip = ('Trigger threshold in ADC counts.\n'
+                   'Range: -32768 to +32767 (INT16 mode: AVERAGE).\n'
+                   '0 = trigger at zero crossing.\n'
+                   'Positive = trigger above zero.\n'
+                   'Negative = trigger below zero.')
+    
     threshold_container, threshold_slider, trigger_threshold_spinbox = create_slider_spinbox_combo(
-        -128, 127, trigger_threshold_adc, step=1,
-        tooltip='Trigger threshold in ADC counts.\n'
-                'Range: -128 to +127 for 8-bit ADC.\n'
-                '0 = trigger at zero crossing.\n'
-                'Positive = trigger above zero.\n'
-                'Negative = trigger below zero.'
+        min_val, max_val, trigger_threshold_adc, step=1,
+        tooltip=tooltip
     )
     trigger_threshold_spinbox.setEnabled(trigger_enabled)
     threshold_slider.setEnabled(trigger_enabled)
@@ -1199,40 +1261,21 @@ def create_trigger_controls(psdk, current_pre_trigger_time, current_pre_trigger_
     # Helper function to convert time value from one unit to another
     def convert_time_value(value, from_unit, to_unit):
         """Convert time value from one unit to another."""
-        # Conversion factors to seconds
-        unit_to_seconds = {
-            psdk.TIME_UNIT.NS: 1e-9,
-            psdk.TIME_UNIT.US: 1e-6,
-            psdk.TIME_UNIT.MS: 1e-3,
-            psdk.TIME_UNIT.S: 1.0
-        }
         if from_unit == to_unit:
             return value
         # Convert to seconds first, then to target unit
-        seconds = value * unit_to_seconds.get(from_unit, 1.0)
-        return seconds / unit_to_seconds.get(to_unit, 1.0)
+        seconds = value * TIME_UNIT_TO_SECONDS.get(from_unit, 1.0)
+        return seconds / TIME_UNIT_TO_SECONDS.get(to_unit, 1.0)
     
     # Store current values in seconds for conversion
-    unit_to_seconds = {
-        psdk.TIME_UNIT.NS: 1e-9,
-        psdk.TIME_UNIT.US: 1e-6,
-        psdk.TIME_UNIT.MS: 1e-3,
-        psdk.TIME_UNIT.S: 1.0
-    }
-    pre_trigger_seconds = current_pre_trigger_time * unit_to_seconds.get(current_pre_trigger_units, 1.0)
-    post_trigger_seconds = current_post_trigger_time * unit_to_seconds.get(current_post_trigger_units, 1.0)
+    pre_trigger_seconds = current_pre_trigger_time * TIME_UNIT_TO_SECONDS.get(current_pre_trigger_units, 1.0)
+    post_trigger_seconds = current_post_trigger_time * TIME_UNIT_TO_SECONDS.get(current_post_trigger_units, 1.0)
     
     # Function to update spinbox values when units change
     def on_units_changed():
         new_unit = trigger_units_combo.currentData()
-        unit_to_seconds = {
-            psdk.TIME_UNIT.NS: 1e-9,
-            psdk.TIME_UNIT.US: 1e-6,
-            psdk.TIME_UNIT.MS: 1e-3,
-            psdk.TIME_UNIT.S: 1.0
-        }
         # Convert from seconds to new unit
-        new_unit_factor = unit_to_seconds.get(new_unit, 1.0)
+        new_unit_factor = TIME_UNIT_TO_SECONDS.get(new_unit, 1.0)
         
         # Update pre-trigger value
         new_pre_value = pre_trigger_seconds / new_unit_factor
@@ -1250,24 +1293,12 @@ def create_trigger_controls(psdk, current_pre_trigger_time, current_pre_trigger_
     def on_pre_trigger_changed(value):
         nonlocal pre_trigger_seconds
         current_unit = trigger_units_combo.currentData()
-        unit_to_seconds = {
-            psdk.TIME_UNIT.NS: 1e-9,
-            psdk.TIME_UNIT.US: 1e-6,
-            psdk.TIME_UNIT.MS: 1e-3,
-            psdk.TIME_UNIT.S: 1.0
-        }
-        pre_trigger_seconds = value * unit_to_seconds.get(current_unit, 1.0)
+        pre_trigger_seconds = value * TIME_UNIT_TO_SECONDS.get(current_unit, 1.0)
     
     def on_post_trigger_changed(value):
         nonlocal post_trigger_seconds
         current_unit = trigger_units_combo.currentData()
-        unit_to_seconds = {
-            psdk.TIME_UNIT.NS: 1e-9,
-            psdk.TIME_UNIT.US: 1e-6,
-            psdk.TIME_UNIT.MS: 1e-3,
-            psdk.TIME_UNIT.S: 1.0
-        }
-        post_trigger_seconds = value * unit_to_seconds.get(current_unit, 1.0)
+        post_trigger_seconds = value * TIME_UNIT_TO_SECONDS.get(current_unit, 1.0)
     
     trigger_units_combo.currentIndexChanged.connect(on_units_changed)
     
@@ -1279,29 +1310,15 @@ def create_trigger_controls(psdk, current_pre_trigger_time, current_pre_trigger_
     
     # Set initial value in the selected units
     initial_unit = trigger_units_combo.currentData()
-    unit_to_seconds_init = {
-        psdk.TIME_UNIT.NS: 1e-9,
-        psdk.TIME_UNIT.US: 1e-6,
-        psdk.TIME_UNIT.MS: 1e-3,
-        psdk.TIME_UNIT.S: 1.0
-    }
-    initial_pre_value = pre_trigger_seconds / unit_to_seconds_init.get(initial_unit, 1.0)
+    initial_pre_value = pre_trigger_seconds / TIME_UNIT_TO_SECONDS.get(initial_unit, 1.0)
     pre_trigger_time_spinbox.setValue(initial_pre_value)
     
-    # Enable scroll wheel adjustment when focused
-    pre_trigger_time_spinbox.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-    # Modern styling: no buttons, no frame
-    ButtonSymbols = pg.QtWidgets.QAbstractSpinBox.ButtonSymbols
-    pre_trigger_time_spinbox.setButtonSymbols(ButtonSymbols.NoButtons)
-    pre_trigger_time_spinbox.setFrame(False)
-    
-    # Enhanced tooltip with scroll wheel instructions
-    scroll_hint = "Hover and scroll to adjust • Ctrl+scroll for faster"
+    configure_modern_spinbox(pre_trigger_time_spinbox)
     pre_trigger_time_spinbox.setToolTip(
         'Time BEFORE trigger event.\n'
         'Captures data leading up to the trigger.\n'
         '0 = no pre-trigger (start capture at trigger).\n\n'
-        f'{scroll_hint}'
+        f'{SCROLL_HINT_TEXT}'
     )
     pre_trigger_time_spinbox.setStyleSheet(STYLES['dark_double_spinbox'])
     pre_trigger_time_spinbox.setEnabled(trigger_enabled)
@@ -1319,22 +1336,15 @@ def create_trigger_controls(psdk, current_pre_trigger_time, current_pre_trigger_
     post_trigger_time_spinbox.setDecimals(3)
     
     # Set initial value in the selected units
-    initial_post_value = post_trigger_seconds / unit_to_seconds_init.get(initial_unit, 1.0)
+    initial_post_value = post_trigger_seconds / TIME_UNIT_TO_SECONDS.get(initial_unit, 1.0)
     post_trigger_time_spinbox.setValue(initial_post_value)
     
-    # Enable scroll wheel adjustment when focused
-    post_trigger_time_spinbox.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
-    # Modern styling: no buttons, no frame
-    ButtonSymbols = pg.QtWidgets.QAbstractSpinBox.ButtonSymbols
-    post_trigger_time_spinbox.setButtonSymbols(ButtonSymbols.NoButtons)
-    post_trigger_time_spinbox.setFrame(False)
-    
-    # Enhanced tooltip with scroll wheel instructions
+    configure_modern_spinbox(post_trigger_time_spinbox)
     post_trigger_time_spinbox.setToolTip(
-        f'Time AFTER trigger event.\n'
-        f'Captures data following the trigger.\n'
-        f'Must be less than buffer capacity.\n\n'
-        f'{scroll_hint}'
+        'Time AFTER trigger event.\n'
+        'Captures data following the trigger.\n'
+        'Must be less than buffer capacity.\n\n'
+        f'{SCROLL_HINT_TEXT}'
     )
     post_trigger_time_spinbox.setStyleSheet(STYLES['dark_double_spinbox'])
     post_trigger_time_spinbox.setEnabled(trigger_enabled)
@@ -1894,6 +1904,11 @@ def build_control_panel(config):
     # Trigger Card (Card 4 - Important but not always used)
     trigger_card, trigger_card_layout, _ = create_collapsible_card_widget("Trigger", default_expanded=True)
     
+    # Determine if we're in INT8 mode based on downsampling mode
+    # AVERAGE mode uses INT16, DECIMATE uses INT8
+    current_mode = config.get('DOWNSAMPLING_MODE', config['psdk'].RATIO_MODE.DECIMATE)
+    is_int8_mode = (current_mode != config['psdk'].RATIO_MODE.AVERAGE)
+    
     # Create all trigger widgets using the builder function
     trigger_widgets = create_trigger_controls(
         config['psdk'],
@@ -1902,8 +1917,9 @@ def build_control_panel(config):
         config.get('POST_TRIGGER_TIME', 1.0),
         config.get('POST_TRIGGER_TIME_UNITS', config['psdk'].TIME_UNIT.MS),
         trigger_enabled=config.get('TRIGGER_ENABLED', False),
-        trigger_threshold_adc=config.get('TRIGGER_THRESHOLD_ADC', 50),
-        hardware_adc_sample_rate=config.get('hardware_adc_sample_rate', 1000000)
+        trigger_threshold_adc=config.get('TRIGGER_THRESHOLD_ADC', 0),
+        hardware_adc_sample_rate=config.get('hardware_adc_sample_rate', 1000000),
+        is_int8_mode=is_int8_mode
     )
     
     # Arrange widgets in card layout
@@ -1955,24 +1971,7 @@ def build_control_panel(config):
     # Enable checkbox
     raw_display_enable_checkbox = pg.QtWidgets.QCheckBox("Enable PyQtGraph Downsampling")
     raw_display_enable_checkbox.setChecked(config.get('RAW_DATA_DOWNSAMPLE_ENABLED', True))
-    raw_display_enable_checkbox.setStyleSheet("""
-        QCheckBox {
-            color: white;
-            font-size: 11px;
-            padding: 2px;
-        }
-        QCheckBox::indicator {
-            width: 14px;
-            height: 14px;
-            border: 1px solid #555555;
-            background-color: #2a2a2a;
-            border-radius: 3px;
-        }
-        QCheckBox::indicator:checked {
-            background-color: #4444ff;
-            border-color: #5555ff;
-        }
-    """)
+    raw_display_enable_checkbox.setStyleSheet(STYLES['checkbox'])
     raw_display_enable_checkbox.setToolTip(
         'Enable PyQtGraph built-in downsampling for raw data visualization.\n'
         'Useful for displaying large raw datasets without performance issues.'
@@ -2050,25 +2049,7 @@ def build_control_panel(config):
     # Gated raw downsampling checkbox
     gated_raw_downsample_checkbox = pg.QtWidgets.QCheckBox("Downsample Gated Raw")
     gated_raw_downsample_checkbox.setChecked(False)
-    gated_raw_downsample_checkbox.setStyleSheet("""
-        QCheckBox {
-            color: white;
-            font-size: 10px;
-            padding: 1px;
-        }
-        QCheckBox::indicator {
-            width: 14px;
-            height: 14px;
-        }
-        QCheckBox::indicator:unchecked {
-            background-color: #333333;
-            border: 1px solid #666666;
-        }
-        QCheckBox::indicator:checked {
-            background-color: #4CAF50;
-            border: 1px solid #4CAF50;
-        }
-    """)
+    gated_raw_downsample_checkbox.setStyleSheet(STYLES['checkbox_small'])
     gated_raw_downsample_checkbox.setToolTip(
         'If enabled, apply the same PyQtGraph downsampling settings to\n'
         'the gated (region-based) raw pull. When disabled, gated raw\n'
@@ -2078,25 +2059,7 @@ def build_control_panel(config):
     # Region markers checkbox
     region_markers_checkbox = pg.QtWidgets.QCheckBox("Show Selection Markers")
     region_markers_checkbox.setChecked(True)
-    region_markers_checkbox.setStyleSheet("""
-        QCheckBox {
-            color: white;
-            font-size: 10px;
-            padding: 1px;
-        }
-        QCheckBox::indicator {
-            width: 14px;
-            height: 14px;
-        }
-        QCheckBox::indicator:unchecked {
-            background-color: #333333;
-            border: 1px solid #666666;
-        }
-        QCheckBox::indicator:checked {
-            background-color: #4CAF50;
-            border: 1px solid #4CAF50;
-        }
-    """)
+    region_markers_checkbox.setStyleSheet(STYLES['checkbox_small'])
     region_markers_checkbox.setToolTip(
         'Show or hide the region selection markers (vertical lines) on the plot.\n'
         'When disabled, the selection region and readout are hidden.'
@@ -2115,27 +2078,7 @@ def build_control_panel(config):
     # Enable checkbox
     periodic_log_enable_checkbox = pg.QtWidgets.QCheckBox("Enable Periodic Logging")
     periodic_log_enable_checkbox.setChecked(config.get('PERIODIC_LOG_ENABLED', False))
-    periodic_log_enable_checkbox.setStyleSheet("""
-        QCheckBox {
-            color: white;
-            font-size: 11px;
-            padding: 2px;
-        }
-        QCheckBox::indicator {
-            width: 14px;
-            height: 14px;
-            border: 1px solid #555555;
-            background-color: #2a2a2a;
-            border-radius: 3px;
-        }
-        QCheckBox::indicator:checked {
-            background-color: #2674f0;
-            border: 1px solid #3b84ff;
-        }
-        QCheckBox::indicator:hover {
-            border: 1px solid #666666;
-        }
-    """)
+    periodic_log_enable_checkbox.setStyleSheet(STYLES['checkbox_blue'])
     periodic_log_enable_checkbox.setToolTip(
         'Enable or disable periodic logging of downsampled values to file.\n'
         'When disabled, no data will be written even if a file path is set.'
