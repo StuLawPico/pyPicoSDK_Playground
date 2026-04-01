@@ -103,7 +103,7 @@ INITIAL_CONFIG = {
 
     # Channel Configuration
     'channel_range': psdk.RANGE.mV500,
-    'channel_coupling': psdk.COUPLING.DC,
+    'channel_coupling': psdk.COUPLING.DC_50OHM,
     'channel_probe_scale': 1.0,
 
     # Signal Generator Configuration
@@ -649,7 +649,7 @@ def on_apply_button_clicked():
         ('new_channel_probe_scale', 'channel_probe_scale', 'probe', lambda v: f"{v}x"),
         ('new_trigger_enabled', 'TRIGGER_ENABLED', 'trigger', lambda v: 'ON' if v else 'OFF'),
         ('new_trigger_threshold', 'TRIGGER_THRESHOLD_ADC', 'threshold', lambda v: f"{v} ADC"),
-        ('new_trigger_direction', 'TRIGGER_DIRECTION', 'direction', 
+        ('new_trigger_direction', 'TRIGGER_DIRECTION', 'direction',
          lambda v: {psdk.TRIGGER_DIR.RISING: 'Rising', psdk.TRIGGER_DIR.FALLING: 'Falling',
                     psdk.TRIGGER_DIR.RISING_OR_FALLING: 'Rising/Falling'}.get(v, '?')),
         ('new_time_window', 'TARGET_TIME_WINDOW', 'time_window', lambda v: f"{v:.1f}s"),
@@ -659,7 +659,7 @@ def on_apply_button_clicked():
         ('new_periodic_log_file', 'PERIODIC_LOG_FILE', 'log_file', None),
         ('new_periodic_log_rate', 'PERIODIC_LOG_RATE', 'log_rate', lambda v: f"{v:.1f}s"),
     ]
-    
+
     changes = []
     for new_key, current_key, label, formatter in change_checks:
         new_val = settings.get(new_key)
@@ -667,7 +667,7 @@ def on_apply_button_clicked():
         if new_val != current_val:
             formatted = formatter(new_val) if formatter else str(new_val)
             changes.append(f"{label}={formatted}")
-    
+
     # Special handling for trigger times (need unit lookup)
     if settings['new_pre_trigger_time'] != current_settings.get('PRE_TRIGGER_TIME'):
         units = TIME_UNIT_NAMES.get(settings['new_pre_trigger_units'], '?')
@@ -675,7 +675,7 @@ def on_apply_button_clicked():
     if settings['new_post_trigger_time'] != current_settings.get('POST_TRIGGER_TIME'):
         units = TIME_UNIT_NAMES.get(settings['new_post_trigger_units'], '?')
         changes.append(f"post_trigger={settings['new_post_trigger_time']} {units}")
-    
+
     print(f"\n[UPDATE] {', '.join(changes)}")
 
     # Step 5: Validate and optimize settings
@@ -813,15 +813,15 @@ def on_apply_button_clicked():
                 TRIGGER_ENABLED = settings['new_trigger_enabled']
                 TRIGGER_DIRECTION = settings['new_trigger_direction']
                 trigger_fired = False  # Reset trigger fired flag on successful restart
-                
+
                 # Check if mode changed (which affects trigger threshold datatype)
                 old_mode = settings.get('current_mode', DOWNSAMPLING_MODE)
                 new_mode = settings['new_mode']
                 mode_changed = (old_mode != new_mode)
-                
+
                 # Determine if new mode is INT8 (DECIMATE) or INT16 (AVERAGE)
                 is_int8_mode = (new_mode != psdk.RATIO_MODE.AVERAGE)
-                
+
                 if mode_changed:
                     # Mode changed - reset trigger threshold to 0 and update spinbox range
                     TRIGGER_THRESHOLD_ADC = 0
